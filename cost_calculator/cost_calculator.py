@@ -1,4 +1,4 @@
-from utils.queries import get_part
+from utils.queries import get_part, get_bom
 
 part_id = input("Imput part ID: ")
-print(get_part(part_id))
+print(get_bom(part_id))
