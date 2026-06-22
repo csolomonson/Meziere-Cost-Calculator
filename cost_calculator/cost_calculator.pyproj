@@ -24,6 +24,7 @@
   <ItemGroup>
     <Compile Include="cost_calculator.py" />
     <Compile Include="utils\erp_cursor.py" />
+    <Compile Include="utils\queries.py" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include="cost_env\">
