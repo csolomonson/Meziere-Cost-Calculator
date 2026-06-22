@@ -1,7 +1,4 @@
-from utils.erp_cursor import cursor
+from utils.queries import get_part
 
 part_id = input("Imput part ID: ")
-cursor.execute(f'SELECT * FROM Parts WHERE impPartID = \'{part_id}\'')
-rows = cursor.fetchall()
-
-print(rows)
+print(get_part(part_id))
