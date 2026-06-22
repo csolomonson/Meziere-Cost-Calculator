@@ -1,11 +1,12 @@
-from utils.erp_cursor import cursor
+from utils.erp_cursor import cnxn
+import pandas as pd
 
-def run_query(cursor, query):
-    cursor.execute(query)
-    return cursor.fetchall()
+def run_query(query):
+
+    return pd.read_sql(query, cnxn)
 
 def get_part(part_id):
-    return run_query(cursor, f'SELECT * FROM Parts WHERE impPartID = \'{part_id}\'')
+    return run_query(f'SELECT * FROM Parts WHERE impPartID = \'{part_id}\'')
 
 def get_bom(part_id):
     query = f'''
@@ -13,7 +14,7 @@ def get_bom(part_id):
     FROM PartMaterials
     WHERE immMethodID = '{part_id}' AND immBackflush = 1
     '''
-    return run_query(cursor, query)
+    return run_query(query)
 
 def get_operations(part_id):
     query = f'''
@@ -21,4 +22,4 @@ def get_operations(part_id):
     FROM PartOperations
     WHERE imoMethodID = '{part_id}'
     '''
-    return run_query(cursor, query)
+    return run_query(query)
