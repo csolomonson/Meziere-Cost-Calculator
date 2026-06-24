@@ -23,6 +23,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="cost_calculator.py" />
+    <Compile Include="costing\operations.py" />
+    <Compile Include="utils\dataframes.py" />
     <Compile Include="utils\erp_cursor.py" />
     <Compile Include="utils\queries.py" />
   </ItemGroup>
@@ -38,7 +40,12 @@
     </Interpreter>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="costing\" />
     <Folder Include="utils\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="create_costing_tables.sql" />
+    <Content Include="notes.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
