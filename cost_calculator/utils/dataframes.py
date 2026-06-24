@@ -93,6 +93,7 @@ COSTING_TABLE_COLUMNS = {
 
     "DefaultCosts": [
         "ucdWorkCenterID",
+        "ucdMinimumQuantity",
 
         "ucdDefaultLaborHourlyCost",
         "ucdDefaultMachineRunningHourlyCost",

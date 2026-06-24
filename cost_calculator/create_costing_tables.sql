@@ -132,20 +132,30 @@ BEGIN TRY
 
     IF OBJECT_ID(N'dbo.DefaultCosts', N'U') IS NULL
     BEGIN
-        CREATE TABLE dbo.DefaultCosts (
-            ucdWorkCenterID NVARCHAR(50) NOT NULL,
+        CREATE TABLE DefaultCosts (
+        ucdDefaultCostID INT IDENTITY(1,1) NOT NULL,
 
-            ucdDefaultLaborHourlyCost DECIMAL(19,4) NULL,
-            ucdDefaultMachineRunningHourlyCost DECIMAL(19,4) NULL,
-            ucdDefaultMachineOccupiedHourlyCost DECIMAL(19,4) NULL,
+        ucdWorkCenterID NVARCHAR(50) NOT NULL,
+        ucdMinimumQuantity DECIMAL(19,6) NOT NULL,
 
-            ucdDefaultMaterialMarkup DECIMAL(9,4) NULL,
-            ucdDefaultLaborMarkup DECIMAL(9,4) NULL,
-            ucdDefaultMachineCostMarkup DECIMAL(9,4) NULL,
-            ucdDefaultExternalOperationMarkup DECIMAL(9,4) NULL,
+        ucdDefaultLaborHourlyCost DECIMAL(19,4) NULL,
+        ucdDefaultMachineRunningHourlyCost DECIMAL(19,4) NULL,
+        ucdDefaultMachineOccupiedHourlyCost DECIMAL(19,4) NULL,
 
-            CONSTRAINT PK_DefaultCosts PRIMARY KEY (ucdWorkCenterID)
-        );
+        ucdDefaultMaterialMarkup DECIMAL(9,4) NULL,
+        ucdDefaultLaborMarkup DECIMAL(9,4) NULL,
+        ucdDefaultMachineCostMarkup DECIMAL(9,4) NULL,
+        ucdDefaultExternalOperationMarkup DECIMAL(9,4) NULL,
+
+        CONSTRAINT PK_DefaultCosts
+            PRIMARY KEY (ucdDefaultCostID),
+
+        CONSTRAINT UQ_DefaultCosts_WorkCenter_MinQty
+            UNIQUE (ucdWorkCenterID, ucdMinimumQuantity),
+
+        CONSTRAINT CK_DefaultCosts_MinQty_Positive
+            CHECK (ucdMinimumQuantity > 0)
+    );
     END;
 
     IF NOT EXISTS (
