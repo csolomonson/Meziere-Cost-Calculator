@@ -25,7 +25,7 @@ def get_bom(part_id, revision_id=''):
 
 def get_operations(part_id, revision_id=''):
     query = f'''
-    SELECT imoMethodID, imoMethodRevisionID, imoWorkCenterID, imoProcessID, imoProcessShortDescription, imoQuantityPerAssembly, imoSetupHours, imoProductionStandard, imoMethodOperationID
+    SELECT imoMethodID, imoMethodRevisionID, imoWorkCenterID, imoProcessID, imoProcessShortDescription, imoQuantityPerAssembly, imoSetupHours, imoProductionStandard, imoMethodOperationID, imoOperationType
     FROM PartOperations
     WHERE imoMethodID = :param1 
         AND imoMethodRevisionID = :param2

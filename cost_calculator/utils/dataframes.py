@@ -6,6 +6,9 @@ COSTING_TABLE_COLUMNS = {
         "ucpPartID",
         "ucpPartRevision",
         "ucpPartDescription",
+
+        "ucpCostQuantity",
+
         "ucpDateCosted",
         "ucpCostedBy",
 
@@ -21,8 +24,14 @@ COSTING_TABLE_COLUMNS = {
         "ucpExternalOperationsRawCost",
         "ucpExternalOperationsMarkedUpCost",
 
+        "ucpAdditionalRawCost",
+        "ucpAdditionalMarkedUpCost",
+
         "ucpTotalRawCost",
         "ucpTotalMarkedUpCost",
+
+        "ucpUnitRawCost",
+        "ucpUnitMarkedUpCost",
 
         "ucpNotes",
     ],
@@ -31,12 +40,15 @@ COSTING_TABLE_COLUMNS = {
         "ucoPartOperationLineID",
         "ucoPartCostID",
 
+        "ucoCostQuantity",
+
         "ucoWorkCenterID",
         "ucoOperationID",
         "ucoOperationDescription",
 
         "ucoSetupTimeHours",
         "ucoCycleTimeHours",
+
         "ucoBatchSize",
         "ucoBatchTimeHours",
 
@@ -56,6 +68,12 @@ COSTING_TABLE_COLUMNS = {
         "ucoLastPOCost",
         "ucoExternalOperationMarkup",
 
+        "ucoAdditionalCostPerPart",
+        "ucoAdditionalCostTotal",
+        "ucoAdditionalCostMarkup",
+        "ucoAdditionalCostRawCost",
+        "ucoAdditionalCostMarkedUpCost",
+
         "ucoMachineRawCost",
         "ucoMachineMarkedUpCost",
 
@@ -73,10 +91,14 @@ COSTING_TABLE_COLUMNS = {
         "ucmPartMaterialLineID",
         "ucmPartCostID",
 
+        "ucmCostQuantity",
+
         "ucmMaterialID",
         "ucmMaterialDescription",
 
         "ucmQtyPerAssembly",
+        "ucmTotalQuantityRequired",
+
         "ucmIsPurchased",
 
         "ucmLastPO",
@@ -92,6 +114,8 @@ COSTING_TABLE_COLUMNS = {
     ],
 
     "DefaultCosts": [
+        "ucdDefaultCostID",
+
         "ucdWorkCenterID",
         "ucdMinimumQuantity",
 
@@ -103,11 +127,36 @@ COSTING_TABLE_COLUMNS = {
         "ucdDefaultLaborMarkup",
         "ucdDefaultMachineCostMarkup",
         "ucdDefaultExternalOperationMarkup",
+        "ucdDefaultAdditionalCostMarkup",
     ],
 }
 
 
-def empty_costing_dataframes():
+def empty_costing_dataframe(table_name: str) -> pd.DataFrame:
+    """
+    Return an empty DataFrame for one costing table.
+
+    Example:
+        part_costs_df = empty_costing_dataframe("PartCosts")
+    """
+    if table_name not in COSTING_TABLE_COLUMNS:
+        valid_tables = ", ".join(COSTING_TABLE_COLUMNS.keys())
+        raise ValueError(
+            f"Unknown table_name '{table_name}'. "
+            f"Expected one of: {valid_tables}"
+        )
+
+    return pd.DataFrame(columns=COSTING_TABLE_COLUMNS[table_name])
+
+
+def empty_costing_dataframes() -> dict[str, pd.DataFrame]:
+    """
+    Return empty DataFrames for all costing tables.
+
+    Example:
+        dfs = empty_costing_dataframes()
+        operation_lines_df = dfs["OperationCostLines"]
+    """
     return {
         table_name: pd.DataFrame(columns=columns)
         for table_name, columns in COSTING_TABLE_COLUMNS.items()
