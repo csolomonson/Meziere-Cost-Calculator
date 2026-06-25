@@ -196,28 +196,138 @@ def build_operation_cost_lines(
     )
 
 def update_internal_costs(op_lines_df, batch_size=1):
-    for n, line in op_lines_df.iterrows():
-        quantity = line['ucoCostQuantity'] * line['ucoQuantityPerAssembly']
-        raw_additional_cost = quantity * line['ucoAdditionalCostPerPart'] + line['ucoAdditionalCostTotal']
+    """
+    Recalculate raw and marked-up operation costs for each operation line.
 
-        if batch_size and batch_size > 0:
-            number_of_batches = math.ceil(quantity / batch_size)
+    Assumptions:
+    - Markups are stored as multipliers:
+        1.00 = no markup
+        1.25 = 25% markup
+    - ucoExternalCost is the raw external operation cost.
+    - ucoAdditionalCostPerPart applies to total operation quantity.
+    - ucoAdditionalCostTotal applies once per operation line.
+    """
+
+    op_lines_df = op_lines_df.copy()
+
+    for n, line in op_lines_df.iterrows():
+        cost_quantity = line["ucoCostQuantity"] or 0
+        qty_per_assembly = line["ucoQuantityPerAssembly"] or 0
+
+        quantity = cost_quantity * qty_per_assembly
+
+        # Prefer the line's batch size if present; otherwise use function argument.
+        line_batch_size = line["ucoBatchSize"] or batch_size
+
+        if line_batch_size and line_batch_size > 0 and quantity > 0:
+            number_of_batches = math.ceil(quantity / line_batch_size)
         else:
             number_of_batches = 0
 
-        setup_labor_hours = line['ucoSetupTimeHours'] 
-        total_tending_labor_hours = (number_of_batches - 1) * line['ucoBatchResetTimeHours']
-        setup_raw_cost = line['ucoSetupLaborRate'] * setup_labor_hours
-        tending_raw_cost = line['ucoBatchResetLaborRate'] * total_tending_labor_hours
+        # Reset happens between batches, so one batch has zero resets.
+        number_of_resets = max(number_of_batches - 1, 0)
+
+        # -------------------------
+        # Additional cost
+        # -------------------------
+        raw_additional_cost = (
+            quantity * (line["ucoAdditionalCostPerPart"] or 0)
+            + (line["ucoAdditionalCostTotal"] or 0)
+        )
+
+        additional_markup = line["ucoAdditionalCostMarkup"] or 0
+        markedup_additional_cost = raw_additional_cost * additional_markup
+
+        # -------------------------
+        # Labor cost
+        # -------------------------
+        setup_labor_hours = line["ucoSetupTimeHours"] or 0
+        total_tending_labor_hours = (
+            number_of_resets * (line["ucoBatchResetTimeHours"] or 0)
+        )
+
+        setup_raw_cost = (
+            (line["ucoSetupLaborRate"] or 0)
+            * setup_labor_hours
+        )
+
+        tending_raw_cost = (
+            (line["ucoBatchResetLaborRate"] or 0)
+            * total_tending_labor_hours
+        )
+
         labor_raw_cost = setup_raw_cost + tending_raw_cost
 
-        machine_occupied_time = line['ucoSetupTimeHours'] + quantity * line['ucoCycleTimeHours'] + (number_of_batches - 1) * line['ucoBatchResetTimeHours']
-        machine_running_time = line['ucoCycleTimeHours'] * quantity
-        machine_time_raw_cost = machine_occupied_time * line['ucoMachineOccupiedHourlyCost'] + machine_running_time * line['ucoMachineRunningHourlyCost']
+        labor_markup = line["ucoLaborMarkup"] or 0
+        markedup_labor_cost = labor_raw_cost * labor_markup
 
-        markedup_additional_cost = raw_additional_cost * line['ucoAdditionalCostMarkup']
-        markedup_labor_cost = labor_raw_cost * line['ucoLaborMarkup']
-        markedup_machine_cost = machine_time_raw_cost *  line['ucoMachineCostMarkup']
+        # -------------------------
+        # Machine cost
+        # -------------------------
+        cycle_time_hours = line["ucoCycleTimeHours"] or 0
+        setup_time_hours = line["ucoSetupTimeHours"] or 0
+        reset_time_hours = line["ucoBatchResetTimeHours"] or 0
+
+        machine_occupied_time = (
+            setup_time_hours
+            + quantity * cycle_time_hours
+            + number_of_resets * reset_time_hours
+        )
+
+        machine_running_time = cycle_time_hours * quantity
+
+        machine_time_raw_cost = (
+            machine_occupied_time * (line["ucoMachineOccupiedHourlyCost"] or 0)
+            + machine_running_time * (line["ucoMachineRunningHourlyCost"] or 0)
+        )
+
+        machine_markup = line["ucoMachineCostMarkup"] or 0
+        markedup_machine_cost = machine_time_raw_cost * machine_markup
+
+        # -------------------------
+        # External operation cost
+        # -------------------------
+        external_raw_cost = line["ucoExternalCost"] or 0
+
+        external_markup = line["ucoExternalOperationMarkup"] or 0
+        markedup_external_cost = external_raw_cost * external_markup
+
+        # -------------------------
+        # Line totals
+        # -------------------------
+        line_raw_cost = (
+            raw_additional_cost
+            + labor_raw_cost
+            + machine_time_raw_cost
+            + external_raw_cost
+        )
+
+        line_markedup_cost = (
+            markedup_additional_cost
+            + markedup_labor_cost
+            + markedup_machine_cost
+            + markedup_external_cost
+        )
+
+        # -------------------------
+        # Write back to DataFrame
+        # -------------------------
+        op_lines_df.at[n, "ucoAdditionalCostRawCost"] = raw_additional_cost
+        op_lines_df.at[n, "ucoAdditionalCostMarkedUpCost"] = markedup_additional_cost
+
+        op_lines_df.at[n, "ucoMachineRawCost"] = machine_time_raw_cost
+        op_lines_df.at[n, "ucoMachineMarkedUpCost"] = markedup_machine_cost
+
+        op_lines_df.at[n, "ucoLaborRawCost"] = labor_raw_cost
+        op_lines_df.at[n, "ucoLaborMarkedUpCost"] = markedup_labor_cost
+
+        op_lines_df.at[n, "ucoExternalOperationRawCost"] = external_raw_cost
+        op_lines_df.at[n, "ucoExternalOperationMarkedUpCost"] = markedup_external_cost
+
+        op_lines_df.at[n, "ucoLineRawCost"] = line_raw_cost
+        op_lines_df.at[n, "ucoLineMarkedUpCost"] = line_markedup_cost
+
+    return op_lines_df
 
         
 
