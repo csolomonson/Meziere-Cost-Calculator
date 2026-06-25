@@ -158,6 +158,7 @@ def build_operation_cost_lines(
 
             "ucoSetupLaborRate": labor_hourly_cost,
             "ucoBatchResetTimeHours": 0,
+            "ucoBatchIdleTimeHours": 0,
             "ucoBatchResetLaborRate": labor_hourly_cost,
             "ucoLaborMarkup": labor_markup,
 
@@ -267,11 +268,12 @@ def update_internal_costs(op_lines_df, batch_size=1):
         cycle_time_hours = line["ucoCycleTimeHours"] or 0
         setup_time_hours = line["ucoSetupTimeHours"] or 0
         reset_time_hours = line["ucoBatchResetTimeHours"] or 0
+        idle_time_hours = line["ucoBatchIdleTimeHours"] or 0
 
         machine_occupied_time = (
             setup_time_hours
             + quantity * cycle_time_hours
-            + number_of_resets * reset_time_hours
+            + number_of_resets * (reset_time_hours + idle_time_hours)
         )
 
         machine_running_time = cycle_time_hours * quantity
