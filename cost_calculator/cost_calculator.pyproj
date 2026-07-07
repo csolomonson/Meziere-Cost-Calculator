@@ -23,7 +23,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="cost_calculator.py" />
+    <Compile Include="api.py" />
     <Compile Include="costing\operations.py" />
+    <Compile Include="costing\persistence.py" />
+    <Compile Include="costing\materials.py" />
+    <Compile Include="costing\common.py" />
+    <Compile Include="costing\calculator.py" />
     <Compile Include="utils\dataframes.py" />
     <Compile Include="utils\erp_cursor.py" />
     <Compile Include="utils\queries.py" />
@@ -42,10 +47,15 @@
   <ItemGroup>
     <Folder Include="costing\" />
     <Folder Include="utils\" />
+    <Folder Include="static\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="create_costing_tables.sql" />
     <Content Include="notes.txt" />
+    <Content Include="static\styles.css" />
+    <Content Include="static\app.jsx" />
+    <Content Include="static\index.html" />
+    <Content Include="requirements.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

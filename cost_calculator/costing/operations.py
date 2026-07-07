@@ -1,12 +1,17 @@
-from utils.queries import get_operations, get_default_costs
-from utils.dataframes import COSTING_TABLE_COLUMNS
-import pandas as pd
 import math
+
+import pandas as pd
+
+from costing.common import markup_multiplier, number
+from utils.queries import get_default_costs, get_last_external_operation_po, get_operations
+
 
 DEFAULT_COST_COLUMNS = [
     "ucdDefaultLaborHourlyCost",
     "ucdDefaultMachineRunningHourlyCost",
     "ucdDefaultMachineOccupiedHourlyCost",
+    "ucdDefaultBatchResetTimeHours",
+    "ucdDefaultBatchIdleTimeHours",
     "ucdDefaultMaterialMarkup",
     "ucdDefaultLaborMarkup",
     "ucdDefaultMachineCostMarkup",
@@ -14,14 +19,91 @@ DEFAULT_COST_COLUMNS = [
     "ucdDefaultAdditionalCostMarkup",
 ]
 
+OPERATION_COST_COLUMNS = [
+    "ucoPartOperationLineID",
+    "ucoPartCostID",
+    "ucoCostQuantity",
+    "ucoQuantityPerAssembly",
+    "ucoWorkCenterID",
+    "ucoOperationID",
+    "ucoOperationDescription",
+    "ucoSetupTimeHours",
+    "ucoCycleTimeHours",
+    "ucoBatchSize",
+    "ucoBatchTimeHours",
+    "ucoAutomated",
+    "ucoMachineRunningHourlyCost",
+    "ucoMachineOccupiedHourlyCost",
+    "ucoMachineCostMarkup",
+    "ucoSetupLaborRate",
+    "ucoBatchResetTimeHours",
+    "ucoBatchIdleTimeHours",
+    "ucoUseAfterHoursIdle",
+    "ucoStartTime",
+    "ucoAfterHoursIdleRateMultiplier",
+    "ucoAfterHoursIdleTimeHours",
+    "ucoBatchResetLaborRate",
+    "ucoLaborMarkup",
+    "ucoExternalJob",
+    "ucoLastPO",
+    "ucoLastPOCost",
+    "ucoLastPODate",
+    "ucoExternalCost",
+    "ucoExternalOperationMarkup",
+    "ucoAdditionalCostPerPart",
+    "ucoAdditionalCostTotal",
+    "ucoAdditionalCostMarkup",
+    "ucoAdditionalCostRawCost",
+    "ucoAdditionalCostMarkedUpCost",
+    "ucoMachineRawCost",
+    "ucoMachineMarkedUpCost",
+    "ucoLaborRawCost",
+    "ucoLaborMarkedUpCost",
+    "ucoExternalOperationRawCost",
+    "ucoExternalOperationMarkedUpCost",
+    "ucoLineRawCost",
+    "ucoLineMarkedUpCost",
+]
+
+DEFAULT_FALLBACKS = {
+    "ucdDefaultLaborHourlyCost": 0.0,
+    "ucdDefaultMachineRunningHourlyCost": 0.0,
+    "ucdDefaultMachineOccupiedHourlyCost": 0.0,
+    "ucdDefaultBatchResetTimeHours": 0.0,
+    "ucdDefaultBatchIdleTimeHours": 0.0,
+    "ucdDefaultMaterialMarkup": 1.0,
+    "ucdDefaultLaborMarkup": 1.0,
+    "ucdDefaultMachineCostMarkup": 1.0,
+    "ucdDefaultExternalOperationMarkup": 1.0,
+    "ucdDefaultAdditionalCostMarkup": 1.0,
+}
+
+
+def normalize_default_costs(defaults_df):
+    defaults_df = defaults_df.copy()
+
+    if "ucdWorkCenterID" not in defaults_df.columns:
+        defaults_df["ucdWorkCenterID"] = "__GLOBAL__"
+
+    if "ucdMinimumQuantity" not in defaults_df.columns:
+        defaults_df["ucdMinimumQuantity"] = 1
+
+    for column, fallback in DEFAULT_FALLBACKS.items():
+        if column not in defaults_df.columns:
+            defaults_df[column] = fallback
+
+    if defaults_df.empty:
+        defaults_df = pd.DataFrame([{
+            "ucdWorkCenterID": "__GLOBAL__",
+            "ucdMinimumQuantity": 1,
+            **DEFAULT_FALLBACKS,
+        }])
+
+    return defaults_df
+
 
 def get_best_default_row(defaults_df, work_center_id, cost_quantity):
-    """
-    Return the row for this work center with the largest minimum quantity
-    less than or equal to the requested cost quantity.
-
-    Returns None if no matching row exists.
-    """
+    defaults_df = normalize_default_costs(defaults_df)
     matches = defaults_df[
         (defaults_df["ucdWorkCenterID"] == work_center_id)
         & (defaults_df["ucdMinimumQuantity"] <= cost_quantity)
@@ -35,14 +117,7 @@ def get_best_default_row(defaults_df, work_center_id, cost_quantity):
 
 
 def resolve_defaults_for_work_center(defaults_df, work_center_id, cost_quantity):
-    """
-    Resolve defaults using this rule:
-
-    1. Find best matching work-center row.
-    2. Find best matching __GLOBAL__ row.
-    3. For each default column, use work-center value if present.
-       Otherwise fall back to __GLOBAL__.
-    """
+    defaults_df = normalize_default_costs(defaults_df)
     global_row = get_best_default_row(
         defaults_df=defaults_df,
         work_center_id="__GLOBAL__",
@@ -51,9 +126,8 @@ def resolve_defaults_for_work_center(defaults_df, work_center_id, cost_quantity)
 
     if global_row is None:
         raise ValueError(
-            f"No __GLOBAL__ default row found for quantity {cost_quantity}. "
-            "You need at least one DefaultCosts row with "
-            "ucdWorkCenterID='__GLOBAL__' and ucdMinimumQuantity <= cost_quantity."
+            "No __GLOBAL__ default row found for this quantity. "
+            "Add one DefaultCosts row with ucdWorkCenterID='__GLOBAL__'."
         )
 
     work_center_row = get_best_default_row(
@@ -63,27 +137,111 @@ def resolve_defaults_for_work_center(defaults_df, work_center_id, cost_quantity)
     )
 
     resolved = {}
-
     for col in DEFAULT_COST_COLUMNS:
         if work_center_row is not None and pd.notna(work_center_row[col]):
             resolved[col] = work_center_row[col]
-        else:
+        elif pd.notna(global_row[col]):
             resolved[col] = global_row[col]
+        else:
+            resolved[col] = DEFAULT_FALLBACKS[col]
 
     return resolved
 
 
 def production_standard_to_cycle_time_hours(production_standard):
-    """
-    Assumption:
-    imoProductionStandard is minutes per piece.
-    """
-    production_standard = production_standard or 0
+    production_standard = number(production_standard, 0.0)
 
     if production_standard == 0:
-        return 0
+        return 0.0
 
     return production_standard / 60
+
+
+def resolve_external_operation_cost(part_id, revision_id, op, quantity):
+    po_df = get_last_external_operation_po(
+        part_id=part_id,
+        revision_id=revision_id,
+        method_operation_id=op.get("imoMethodOperationID"),
+    )
+
+    if po_df.empty:
+        return {
+            "last_po": None,
+            "last_po_cost": None,
+            "last_po_date": None,
+            "external_cost": 0.0,
+        }
+
+    po = po_df.iloc[0]
+    unit_cost = number(po.get("pmlPurchaseUnitCostBase"), 0.0)
+    setup_charge = number(po.get("pmlSetupChargeBase"), 0.0)
+    external_cost = quantity * unit_cost + setup_charge
+    po_date = po.get("pmlDueDate")
+    if pd.isna(po_date):
+        po_date = po.get("pmlCreatedDate")
+
+    return {
+        "last_po": f"{po.get('pmlPurchaseOrderID')}-{po.get('pmlPurchaseOrderLineID')}",
+        "last_po_cost": unit_cost,
+        "last_po_date": po_date,
+        "external_cost": external_cost,
+    }
+
+
+def truthy(value):
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def parse_time_to_hours(value, fallback):
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return fallback
+
+    text = str(value).strip()
+    if not text:
+        return fallback
+
+    try:
+        if ":" in text:
+            hours_text, minutes_text = text.split(":", 1)
+            return float(hours_text) + float(minutes_text[:2]) / 60
+        return float(text)
+    except Exception:
+        return fallback
+
+
+def after_hours_idle_time(start_time, occupied_hours, shift_start="06:00", shift_end="14:30"):
+    occupied_hours = number(occupied_hours, 0.0)
+    if occupied_hours <= 0:
+        return 0.0
+
+    shift_start_hour = parse_time_to_hours(shift_start, 6.0)
+    shift_end_hour = parse_time_to_hours(shift_end, 14.5)
+    shift_length = shift_end_hour - shift_start_hour
+    if shift_length <= 0:
+        shift_length += 24
+
+    start_hour = parse_time_to_hours(start_time, shift_start_hour)
+    while start_hour < shift_start_hour:
+        start_hour += 24
+    while start_hour >= shift_start_hour + 24:
+        start_hour -= 24
+
+    end_hour = start_hour + occupied_hours
+    shift_day = math.floor((end_hour - shift_start_hour) / 24)
+    current_shift_start = shift_start_hour + shift_day * 24
+    current_shift_end = current_shift_start + shift_length
+
+    if current_shift_start <= end_hour <= current_shift_end:
+        return 0.0
+
+    if end_hour < current_shift_start:
+        return current_shift_start - end_hour
+
+    return current_shift_start + 24 - end_hour
 
 
 def build_operation_cost_lines(
@@ -96,214 +254,179 @@ def build_operation_cost_lines(
     erp_ops = get_operations(part_id, revision_id)
     defaults_df = get_default_costs()
 
+    if erp_ops.empty:
+        return pd.DataFrame(columns=OPERATION_COST_COLUMNS)
+
     rows = []
 
     for _, op in erp_ops.iterrows():
-        setup_hours = op["imoSetupHours"] or 0
-        qty_per_assembly = op["imoQuantityPerAssembly"] or 1
-
+        setup_hours = number(op.get("imoSetupHours"), 0.0)
+        qty_per_assembly = number(op.get("imoQuantityPerAssembly"), 1.0)
         cycle_time_hours = production_standard_to_cycle_time_hours(
-            op["imoProductionStandard"]
+            op.get("imoProductionStandard")
         )
-
-        # This is runtime for the requested quote quantity.
         run_time_hours = cycle_time_hours * qty_per_assembly * cost_quantity
 
         defaults = resolve_defaults_for_work_center(
             defaults_df=defaults_df,
-            work_center_id=op["imoWorkCenterID"],
+            work_center_id=op.get("imoWorkCenterID"),
             cost_quantity=cost_quantity,
         )
 
-        machine_running_hourly_cost = (
-            defaults["ucdDefaultMachineRunningHourlyCost"] or 0
-        )
-        machine_occupied_hourly_cost = (
-            defaults["ucdDefaultMachineOccupiedHourlyCost"] or 0
-        )
-        labor_hourly_cost = defaults["ucdDefaultLaborHourlyCost"] or 0
+        labor_hourly_cost = number(defaults["ucdDefaultLaborHourlyCost"], 0.0)
+        external_job = number(op.get("imoOperationType"), 0) == 2
+        operation_quantity = cost_quantity * qty_per_assembly
+        external_cost = {
+            "last_po": None,
+            "last_po_cost": None,
+            "last_po_date": None,
+            "external_cost": 0.0,
+        }
+        if external_job:
+            external_cost = resolve_external_operation_cost(
+                part_id=part_id,
+                revision_id=revision_id,
+                op=op,
+                quantity=operation_quantity,
+            )
 
-        machine_markup = defaults["ucdDefaultMachineCostMarkup"] or 0
-        labor_markup = defaults["ucdDefaultLaborMarkup"] or 0
-        external_operation_markup = (
-            defaults["ucdDefaultExternalOperationMarkup"] or 0
-        )
-        additional_cost_markup = defaults["ucdDefaultAdditionalCostMarkup"] or 0
-
-        external_job = op["imoOperationType"] == 2
-
-        row = {
-            "ucoPartOperationLineID": op["imoMethodOperationID"],
+        rows.append({
+            "ucoPartOperationLineID": op.get("imoMethodOperationID"),
             "ucoPartCostID": part_cost_id,
-
             "ucoCostQuantity": cost_quantity,
             "ucoQuantityPerAssembly": qty_per_assembly,
-
-            "ucoWorkCenterID": op["imoWorkCenterID"],
-            "ucoOperationID": op["imoProcessID"],
-            "ucoOperationDescription": op["imoProcessShortDescription"],
-
+            "ucoWorkCenterID": op.get("imoWorkCenterID"),
+            "ucoOperationID": op.get("imoProcessID"),
+            "ucoOperationDescription": op.get("imoProcessShortDescription"),
             "ucoSetupTimeHours": setup_hours,
             "ucoCycleTimeHours": cycle_time_hours,
-
-            # Automation/operator-tending batch size.
             "ucoBatchSize": batch_size,
             "ucoBatchTimeHours": run_time_hours,
-
             "ucoAutomated": False,
-
-            "ucoMachineRunningHourlyCost": machine_running_hourly_cost,
-            "ucoMachineOccupiedHourlyCost": machine_occupied_hourly_cost,
-            "ucoMachineCostMarkup": machine_markup,
-
+            "ucoMachineRunningHourlyCost": number(defaults["ucdDefaultMachineRunningHourlyCost"], 0.0),
+            "ucoMachineOccupiedHourlyCost": number(defaults["ucdDefaultMachineOccupiedHourlyCost"], 0.0),
+            "ucoMachineCostMarkup": markup_multiplier(defaults["ucdDefaultMachineCostMarkup"]),
             "ucoSetupLaborRate": labor_hourly_cost,
-            "ucoBatchResetTimeHours": 0,
-            "ucoBatchIdleTimeHours": 0,
+            "ucoBatchResetTimeHours": number(defaults["ucdDefaultBatchResetTimeHours"], 0.0),
+            "ucoBatchIdleTimeHours": number(defaults["ucdDefaultBatchIdleTimeHours"], 0.0),
+            "ucoUseAfterHoursIdle": False,
+            "ucoStartTime": "",
+            "ucoAfterHoursIdleRateMultiplier": 1.0,
+            "ucoAfterHoursIdleTimeHours": 0.0,
             "ucoBatchResetLaborRate": labor_hourly_cost,
-            "ucoLaborMarkup": labor_markup,
-
+            "ucoLaborMarkup": markup_multiplier(defaults["ucdDefaultLaborMarkup"]),
             "ucoExternalJob": external_job,
-            "ucoLastPO": None,
-            "ucoLastPOCost": None,
-            "ucoLastPODate": None,
-            "ucoExternalCost": 0,
-            "ucoExternalOperationMarkup": external_operation_markup,
+            "ucoLastPO": external_cost["last_po"],
+            "ucoLastPOCost": external_cost["last_po_cost"],
+            "ucoLastPODate": external_cost["last_po_date"],
+            "ucoExternalCost": external_cost["external_cost"],
+            "ucoExternalOperationMarkup": markup_multiplier(defaults["ucdDefaultExternalOperationMarkup"]),
+            "ucoAdditionalCostPerPart": 0.0,
+            "ucoAdditionalCostTotal": 0.0,
+            "ucoAdditionalCostMarkup": markup_multiplier(defaults["ucdDefaultAdditionalCostMarkup"]),
+            "ucoAdditionalCostRawCost": 0.0,
+            "ucoAdditionalCostMarkedUpCost": 0.0,
+            "ucoMachineRawCost": 0.0,
+            "ucoMachineMarkedUpCost": 0.0,
+            "ucoLaborRawCost": 0.0,
+            "ucoLaborMarkedUpCost": 0.0,
+            "ucoExternalOperationRawCost": 0.0,
+            "ucoExternalOperationMarkedUpCost": 0.0,
+            "ucoLineRawCost": 0.0,
+            "ucoLineMarkedUpCost": 0.0,
+        })
 
-            "ucoAdditionalCostPerPart": 0,
-            "ucoAdditionalCostTotal": 0,
-            "ucoAdditionalCostMarkup": additional_cost_markup,
+    return pd.DataFrame(rows, columns=OPERATION_COST_COLUMNS)
 
-            "ucoAdditionalCostRawCost": 0,
-            "ucoAdditionalCostMarkedUpCost": 0,
-
-            "ucoMachineRawCost": 0,
-            "ucoMachineMarkedUpCost": 0,
-
-            "ucoLaborRawCost": 0,
-            "ucoLaborMarkedUpCost": 0,
-
-            "ucoExternalOperationRawCost": 0,
-            "ucoExternalOperationMarkedUpCost": 0,
-
-            "ucoLineRawCost": 0,
-            "ucoLineMarkedUpCost": 0,
-        }
-
-        rows.append(row)
-
-    return pd.DataFrame(
-        rows,
-        columns=COSTING_TABLE_COLUMNS["OperationCostLines"],
-    )
 
 def update_internal_costs(op_lines_df, batch_size=1):
-    """
-    Recalculate raw and marked-up operation costs for each operation line.
-
-    Assumptions:
-    - Markups are stored as multipliers:
-        1.00 = no markup
-        1.25 = 25% markup
-    - ucoExternalCost is the raw external operation cost.
-    - ucoAdditionalCostPerPart applies to total operation quantity.
-    - ucoAdditionalCostTotal applies once per operation line.
-    """
-
     op_lines_df = op_lines_df.copy()
 
-    for n, line in op_lines_df.iterrows():
-        cost_quantity = line["ucoCostQuantity"] or 0
-        qty_per_assembly = line["ucoQuantityPerAssembly"] or 0
+    if op_lines_df.empty:
+        return op_lines_df
 
+    for n, line in op_lines_df.iterrows():
+        cost_quantity = number(line.get("ucoCostQuantity"), 0.0)
+        qty_per_assembly = number(line.get("ucoQuantityPerAssembly"), 0.0)
         quantity = cost_quantity * qty_per_assembly
 
-        # Prefer the line's batch size if present; otherwise use function argument.
-        line_batch_size = line["ucoBatchSize"] or batch_size
-
+        line_batch_size = number(line.get("ucoBatchSize"), batch_size)
         if line_batch_size and line_batch_size > 0 and quantity > 0:
             number_of_batches = math.ceil(quantity / line_batch_size)
         else:
             number_of_batches = 0
 
-        # Reset happens between batches, so one batch has zero resets.
         number_of_resets = max(number_of_batches - 1, 0)
 
-        # -------------------------
-        # Additional cost
-        # -------------------------
         raw_additional_cost = (
-            quantity * (line["ucoAdditionalCostPerPart"] or 0)
-            + (line["ucoAdditionalCostTotal"] or 0)
+            quantity * number(line.get("ucoAdditionalCostPerPart"), 0.0)
+            + number(line.get("ucoAdditionalCostTotal"), 0.0)
         )
-
-        additional_markup = line["ucoAdditionalCostMarkup"] or 0
-        markedup_additional_cost = raw_additional_cost * additional_markup
-
-        # -------------------------
-        # Labor cost
-        # -------------------------
-        setup_labor_hours = line["ucoSetupTimeHours"] or 0
-        total_tending_labor_hours = (
-            number_of_resets * (line["ucoBatchResetTimeHours"] or 0)
+        markedup_additional_cost = raw_additional_cost * markup_multiplier(
+            line.get("ucoAdditionalCostMarkup")
         )
 
         setup_raw_cost = (
-            (line["ucoSetupLaborRate"] or 0)
-            * setup_labor_hours
+            number(line.get("ucoSetupLaborRate"), 0.0)
+            * number(line.get("ucoSetupTimeHours"), 0.0)
         )
-
         tending_raw_cost = (
-            (line["ucoBatchResetLaborRate"] or 0)
-            * total_tending_labor_hours
+            number(line.get("ucoBatchResetLaborRate"), 0.0)
+            * number_of_resets
+            * number(line.get("ucoBatchResetTimeHours"), 0.0)
         )
-
         labor_raw_cost = setup_raw_cost + tending_raw_cost
+        markedup_labor_cost = labor_raw_cost * markup_multiplier(line.get("ucoLaborMarkup"))
 
-        labor_markup = line["ucoLaborMarkup"] or 0
-        markedup_labor_cost = labor_raw_cost * labor_markup
+        cycle_time_hours = number(line.get("ucoCycleTimeHours"), 0.0)
+        setup_time_hours = number(line.get("ucoSetupTimeHours"), 0.0)
+        reset_time_hours = number(line.get("ucoBatchResetTimeHours"), 0.0)
+        idle_time_hours = number(line.get("ucoBatchIdleTimeHours"), 0.0)
 
-        # -------------------------
-        # Machine cost
-        # -------------------------
-        cycle_time_hours = line["ucoCycleTimeHours"] or 0
-        setup_time_hours = line["ucoSetupTimeHours"] or 0
-        reset_time_hours = line["ucoBatchResetTimeHours"] or 0
-        idle_time_hours = line["ucoBatchIdleTimeHours"] or 0
-
-        machine_occupied_time = (
+        base_machine_occupied_time = (
             setup_time_hours
             + quantity * cycle_time_hours
             + number_of_resets * (reset_time_hours + idle_time_hours)
         )
-
+        if truthy(line.get("ucoUseAfterHoursIdle")):
+            after_hours_idle_hours = after_hours_idle_time(
+                line.get("ucoStartTime"),
+                base_machine_occupied_time,
+                line.get("ucoFirstShiftStartTime", "06:00"),
+                line.get("ucoFirstShiftEndTime", "14:30"),
+            )
+        else:
+            after_hours_idle_hours = 0.0
         machine_running_time = cycle_time_hours * quantity
-
+        occupied_rate = number(line.get("ucoMachineOccupiedHourlyCost"), 0.0)
+        after_hours_multiplier = number(line.get("ucoAfterHoursIdleRateMultiplier"), 1.0)
         machine_time_raw_cost = (
-            machine_occupied_time * (line["ucoMachineOccupiedHourlyCost"] or 0)
-            + machine_running_time * (line["ucoMachineRunningHourlyCost"] or 0)
+            base_machine_occupied_time * occupied_rate
+            + after_hours_idle_hours * occupied_rate * after_hours_multiplier
+            + machine_running_time * number(line.get("ucoMachineRunningHourlyCost"), 0.0)
+        )
+        markedup_machine_cost = machine_time_raw_cost * markup_multiplier(
+            line.get("ucoMachineCostMarkup")
         )
 
-        machine_markup = line["ucoMachineCostMarkup"] or 0
-        markedup_machine_cost = machine_time_raw_cost * machine_markup
+        external_raw_cost = number(line.get("ucoExternalCost"), 0.0)
+        markedup_external_cost = external_raw_cost * markup_multiplier(
+            line.get("ucoExternalOperationMarkup")
+        )
 
-        # -------------------------
-        # External operation cost
-        # -------------------------
-        external_raw_cost = line["ucoExternalCost"] or 0
+        line_is_external = bool(line.get("ucoExternalJob"))
+        if line_is_external:
+            labor_raw_cost = 0.0
+            markedup_labor_cost = 0.0
+            machine_time_raw_cost = 0.0
+            markedup_machine_cost = 0.0
 
-        external_markup = line["ucoExternalOperationMarkup"] or 0
-        markedup_external_cost = external_raw_cost * external_markup
-
-        # -------------------------
-        # Line totals
-        # -------------------------
         line_raw_cost = (
             raw_additional_cost
             + labor_raw_cost
             + machine_time_raw_cost
             + external_raw_cost
         )
-
         line_markedup_cost = (
             markedup_additional_cost
             + markedup_labor_cost
@@ -311,25 +434,16 @@ def update_internal_costs(op_lines_df, batch_size=1):
             + markedup_external_cost
         )
 
-        # -------------------------
-        # Write back to DataFrame
-        # -------------------------
+        op_lines_df.at[n, "ucoAfterHoursIdleTimeHours"] = 0.0 if line_is_external else after_hours_idle_hours
         op_lines_df.at[n, "ucoAdditionalCostRawCost"] = raw_additional_cost
         op_lines_df.at[n, "ucoAdditionalCostMarkedUpCost"] = markedup_additional_cost
-
         op_lines_df.at[n, "ucoMachineRawCost"] = machine_time_raw_cost
         op_lines_df.at[n, "ucoMachineMarkedUpCost"] = markedup_machine_cost
-
         op_lines_df.at[n, "ucoLaborRawCost"] = labor_raw_cost
         op_lines_df.at[n, "ucoLaborMarkedUpCost"] = markedup_labor_cost
-
         op_lines_df.at[n, "ucoExternalOperationRawCost"] = external_raw_cost
         op_lines_df.at[n, "ucoExternalOperationMarkedUpCost"] = markedup_external_cost
-
         op_lines_df.at[n, "ucoLineRawCost"] = line_raw_cost
         op_lines_df.at[n, "ucoLineMarkedUpCost"] = line_markedup_cost
 
     return op_lines_df
-
-        
-
