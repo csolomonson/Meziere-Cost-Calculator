@@ -21,4 +21,4 @@ def number(value, default=0.0):
 
 def markup_multiplier(value):
     value = number(value, 1.0)
-    return value if value else 1.0
+    return value

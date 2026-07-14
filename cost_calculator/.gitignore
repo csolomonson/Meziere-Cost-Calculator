@@ -1,0 +1,9 @@
+secrets/*
+!secrets/README.md
+.env
+static/dist/
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.pytest_cache/

@@ -48,6 +48,7 @@ OPERATION_COST_COLUMNS = [
     "ucoLastPO",
     "ucoLastPOCost",
     "ucoLastPODate",
+    "ucoExternalUnitCost",
     "ucoExternalCost",
     "ucoExternalOperationMarkup",
     "ucoAdditionalCostPerPart",
@@ -169,13 +170,13 @@ def resolve_external_operation_cost(part_id, revision_id, op, quantity):
             "last_po": None,
             "last_po_cost": None,
             "last_po_date": None,
+            "external_unit_cost": 0.0,
             "external_cost": 0.0,
         }
 
     po = po_df.iloc[0]
     unit_cost = number(po.get("pmlPurchaseUnitCostBase"), 0.0)
-    setup_charge = number(po.get("pmlSetupChargeBase"), 0.0)
-    external_cost = quantity * unit_cost + setup_charge
+    external_cost = quantity * unit_cost
     po_date = po.get("pmlDueDate")
     if pd.isna(po_date):
         po_date = po.get("pmlCreatedDate")
@@ -184,6 +185,7 @@ def resolve_external_operation_cost(part_id, revision_id, op, quantity):
         "last_po": f"{po.get('pmlPurchaseOrderID')}-{po.get('pmlPurchaseOrderLineID')}",
         "last_po_cost": unit_cost,
         "last_po_date": po_date,
+        "external_unit_cost": unit_cost,
         "external_cost": external_cost,
     }
 
@@ -280,6 +282,7 @@ def build_operation_cost_lines(
             "last_po": None,
             "last_po_cost": None,
             "last_po_date": None,
+            "external_unit_cost": 0.0,
             "external_cost": 0.0,
         }
         if external_job:
@@ -319,6 +322,7 @@ def build_operation_cost_lines(
             "ucoLastPO": external_cost["last_po"],
             "ucoLastPOCost": external_cost["last_po_cost"],
             "ucoLastPODate": external_cost["last_po_date"],
+            "ucoExternalUnitCost": external_cost["external_unit_cost"],
             "ucoExternalCost": external_cost["external_cost"],
             "ucoExternalOperationMarkup": markup_multiplier(defaults["ucdDefaultExternalOperationMarkup"]),
             "ucoAdditionalCostPerPart": 0.0,

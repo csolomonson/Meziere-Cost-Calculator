@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 from sqlalchemy import inspect, text
 
@@ -6,7 +8,6 @@ from utils.erp_cursor import APP_DATABASE, app_cnxn
 
 IDENTITY_COLUMNS = {
     "PartCosts": {"ucpPartCostID"},
-    "OperationCostLines": {"ucoPartOperationLineID"},
     "MaterialCostLines": {"ucmPartMaterialLineID"},
 }
 
@@ -50,7 +51,7 @@ def set_current_part_cost(connection, part_cost_id):
     if not table_has_column(connection, "PartCosts", "ucpIsCurrent"):
         raise RuntimeError(
             "The database needs the PartCosts.ucpIsCurrent migration before a current cost can be selected. "
-            "Run create_costing_tables.sql once to add the column and index."
+            "For a new or intentionally reset database, use database/reset_schema.sql."
         )
 
     part_cost = connection.execute(
@@ -92,10 +93,30 @@ def mark_part_cost_current(part_cost_id):
         set_current_part_cost(connection, part_cost_id)
 
 
-def save_costing_settings(part_id, revision_id, markup_breaks, global_defaults, machine_defaults, shift_settings=None):
+def save_costing_settings(
+    part_id,
+    revision_id,
+    markup_breaks,
+    global_defaults,
+    machine_defaults,
+    shift_settings=None,
+    global_markup_breaks=None,
+    part_markup_breaks=None,
+    markup_break_scope="part",
+):
     with app_cnxn.begin() as connection:
         assert_app_database(connection)
-        save_markup_breaks(connection, part_id, revision_id, markup_breaks or [])
+        scoped_part_id = (part_id or "").strip() or None
+        if global_markup_breaks is not None:
+            save_markup_breaks(connection, None, "", global_markup_breaks)
+        elif not scoped_part_id:
+            save_markup_breaks(connection, None, "", markup_breaks or [])
+
+        if scoped_part_id:
+            rows = part_markup_breaks if markup_break_scope == "part" else []
+            if rows is None:
+                rows = markup_breaks or []
+            save_markup_breaks(connection, scoped_part_id, revision_id, rows)
         if global_defaults:
             save_global_defaults(connection, global_defaults, shift_settings or {})
         if machine_defaults is not None:
@@ -236,7 +257,7 @@ def assert_app_database(connection):
 
 
 def insert_part_cost(connection, part_cost_df):
-    row = clean_row(frame_for_table(connection, "PartCosts", part_cost_df).iloc[0].to_dict())
+    row = clean_row(frame_for_table(connection, "PartCosts", prepare_part_cost_frame(part_cost_df)).iloc[0].to_dict())
 
     columns = list(row.keys())
     column_sql = ", ".join(columns)
@@ -250,13 +271,42 @@ def insert_part_cost(connection, part_cost_df):
     return connection.execute(query, row).scalar_one()
 
 
+def prepare_part_cost_frame(part_cost_df):
+    frame = part_cost_df.copy()
+    if "ucpRetailPriceLevelsJson" not in frame.columns and "ucpRetailPrices" in frame.columns:
+        frame["ucpRetailPriceLevelsJson"] = frame["ucpRetailPrices"].map(serialize_json_value)
+    return frame
+
+
+def serialize_json_value(value):
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, default=str)
+
+
 def insert_lines(connection, table_name, lines_df):
+    assert_supported_line_table_shape(connection, table_name)
     frame = frame_for_table(connection, table_name, lines_df)
     if frame.empty:
         return
 
+    frame = apply_line_defaults(table_name, frame)
     frame = clean_frame(frame)
     frame.to_sql(table_name, connection, if_exists="append", index=False)
+
+
+def assert_supported_line_table_shape(connection, table_name):
+    if table_name != "OperationCostLines":
+        return
+
+    if table_column_is_identity(connection, table_name, "ucoPartOperationLineID"):
+        raise RuntimeError(
+            "OperationCostLines.ucoPartOperationLineID is still an identity column. "
+            "Run database/migrations/001_migrate_operation_sequence_identity.sql against M2_ME once so operation "
+            "sequence IDs can be saved as 10, 20, 30 per part cost."
+        )
 
 
 def frame_for_table(connection, table_name, df):
@@ -269,6 +319,13 @@ def frame_for_table(connection, table_name, df):
     ]
 
     return df[writable_columns].copy()
+
+
+def apply_line_defaults(table_name, frame):
+    if table_name == "OperationCostLines" and "ucoAutomated" in frame.columns:
+        frame = frame.copy()
+        frame["ucoAutomated"] = frame["ucoAutomated"].fillna(False)
+    return frame
 
 
 def clean_row(row):
@@ -295,3 +352,12 @@ def get_table_columns(connection, table_name):
 
 def table_has_column(connection, table_name, column_name):
     return column_name in get_table_columns(connection, table_name)
+
+
+def table_column_is_identity(connection, table_name, column_name):
+    return bool(connection.execute(
+        text("""
+        SELECT COLUMNPROPERTY(OBJECT_ID(:table_name), :column_name, 'IsIdentity')
+        """),
+        {"table_name": f"dbo.{table_name}", "column_name": column_name},
+    ).scalar() or 0)

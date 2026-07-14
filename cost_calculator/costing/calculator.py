@@ -5,51 +5,7 @@ import pandas as pd
 from costing.common import first_value, number
 from costing.materials import build_material_cost_lines, update_material_costs
 from costing.operations import build_operation_cost_lines, update_internal_costs
-from utils.queries import get_markup_breaks, get_part
-
-
-DEFAULT_MARKUP_BREAKS = [
-    {
-        "breakQty": 1,
-        "material": 1.25,
-        "labor": 1.15,
-        "machine": 1.15,
-        "external": 1.25,
-        "additional": 1.15,
-    },
-    {
-        "breakQty": 10,
-        "material": 1.25,
-        "labor": 1.15,
-        "machine": 1.15,
-        "external": 1.25,
-        "additional": 1.15,
-    },
-    {
-        "breakQty": 100,
-        "material": 1.25,
-        "labor": 1.15,
-        "machine": 1.15,
-        "external": 1.25,
-        "additional": 1.15,
-    },
-    {
-        "breakQty": 1000,
-        "material": 1.25,
-        "labor": 1.15,
-        "machine": 1.15,
-        "external": 1.25,
-        "additional": 1.15,
-    },
-    {
-        "breakQty": 10000,
-        "material": 1.25,
-        "labor": 1.15,
-        "machine": 1.15,
-        "external": 1.25,
-        "additional": 1.15,
-    },
-]
+from utils.queries import get_current_retail_price, get_markup_breaks, get_part
 
 
 def active_markup_break(markup_breaks, cost_quantity):
@@ -74,11 +30,7 @@ def apply_markup_breaks(operation_lines, material_lines, markup_breaks, cost_qua
     material_lines = material_lines.copy()
     if not material_lines.empty:
         default_material_markup = number(active.get("material"), 1.0)
-        for index, line in material_lines.iterrows():
-            cost_source = str(line.get("ucmCostSource") or "")
-            if cost_source.startswith("manufactured_"):
-                continue
-            material_lines.at[index, "ucmMaterialMarkup"] = default_material_markup
+        material_lines["ucmMaterialMarkup"] = default_material_markup
 
     operation_lines = operation_lines.copy()
     if not operation_lines.empty:
@@ -103,6 +55,7 @@ def build_part_cost(
         markup_breaks = dataframe_records(get_markup_breaks(part_id, revision_id))
 
     part_df = get_part(part_id, revision_id)
+    retail_price_df = get_current_retail_price(part_id, revision_id)
 
     operation_lines = build_operation_cost_lines(
         part_id=part_id,
@@ -129,6 +82,7 @@ def build_part_cost(
 
     part_cost = summarize_part_cost(
         part_df=part_df,
+        retail_price_df=retail_price_df,
         part_id=part_id,
         revision_id=revision_id,
         cost_quantity=cost_quantity,
@@ -148,6 +102,7 @@ def build_part_cost(
 
 def summarize_part_cost(
     part_df,
+    retail_price_df,
     part_id,
     revision_id,
     cost_quantity,
@@ -157,20 +112,20 @@ def summarize_part_cost(
     notes=None,
     part_cost_id=None,
 ):
-    materials_raw = sum_column(material_lines, "ucmRawCost")
-    materials_marked_up = sum_column(material_lines, "ucmMarkedUpCost")
+    materials_raw = sum_column(material_lines, "ucmMaterialsRawCost")
+    materials_marked_up = sum_column(material_lines, "ucmMaterialsMarkedUpCost")
 
-    machine_raw = sum_column(operation_lines, "ucoMachineRawCost")
-    machine_marked_up = sum_column(operation_lines, "ucoMachineMarkedUpCost")
+    machine_raw = sum_column(material_lines, "ucmMachineTimeRawCost") + sum_column(operation_lines, "ucoMachineRawCost")
+    machine_marked_up = sum_column(material_lines, "ucmMachineTimeMarkedUpCost") + sum_column(operation_lines, "ucoMachineMarkedUpCost")
 
-    labor_raw = sum_column(operation_lines, "ucoLaborRawCost")
-    labor_marked_up = sum_column(operation_lines, "ucoLaborMarkedUpCost")
+    labor_raw = sum_column(material_lines, "ucmLaborRawCost") + sum_column(operation_lines, "ucoLaborRawCost")
+    labor_marked_up = sum_column(material_lines, "ucmLaborMarkedUpCost") + sum_column(operation_lines, "ucoLaborMarkedUpCost")
 
-    external_raw = sum_column(operation_lines, "ucoExternalOperationRawCost")
-    external_marked_up = sum_column(operation_lines, "ucoExternalOperationMarkedUpCost")
+    external_raw = sum_column(material_lines, "ucmExternalOperationsRawCost") + sum_column(operation_lines, "ucoExternalOperationRawCost")
+    external_marked_up = sum_column(material_lines, "ucmExternalOperationsMarkedUpCost") + sum_column(operation_lines, "ucoExternalOperationMarkedUpCost")
 
-    additional_raw = sum_column(operation_lines, "ucoAdditionalCostRawCost")
-    additional_marked_up = sum_column(operation_lines, "ucoAdditionalCostMarkedUpCost")
+    additional_raw = sum_column(material_lines, "ucmAdditionalRawCost") + sum_column(operation_lines, "ucoAdditionalCostRawCost")
+    additional_marked_up = sum_column(material_lines, "ucmAdditionalMarkedUpCost") + sum_column(operation_lines, "ucoAdditionalCostMarkedUpCost")
 
     total_raw = materials_raw + machine_raw + labor_raw + external_raw + additional_raw
     total_marked_up = (
@@ -190,6 +145,7 @@ def summarize_part_cost(
         "ucpPartID": part_id,
         "ucpPartRevision": revision_id,
         "ucpPartDescription": first_value(part_df, "impPartShortDescription"),
+        "ucpRetailUnitPrice": first_value(retail_price_df, "retail_unit_price"),
         "ucpCostQuantity": cost_quantity,
         "ucpDateCosted": datetime.now(UTC),
         "ucpCostedBy": costed_by,

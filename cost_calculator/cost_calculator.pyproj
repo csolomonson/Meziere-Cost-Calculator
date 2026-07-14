@@ -5,8 +5,7 @@
     <ProjectGuid>db0bf3f2-40d6-477a-8545-12d6431e6d7b</ProjectGuid>
     <ProjectHome>.</ProjectHome>
     <StartupFile>cost_calculator.py</StartupFile>
-    <SearchPath>
-    </SearchPath>
+    <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
     <Name>cost_calculator</Name>
@@ -22,16 +21,105 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="cost_calculator.py" />
     <Compile Include="api.py" />
+    <Compile Include="app_config.py" />
+    <Compile Include="authentication.py" />
+    <Compile Include="cost_calculator.py" />
+    <Compile Include="update_contract.py" />
+    <Compile Include="user_management.py" />
+    <Compile Include="costing\calculator.py" />
+    <Compile Include="costing\common.py" />
+    <Compile Include="costing\conversion_calculator.py" />
+    <Compile Include="costing\materials.py" />
     <Compile Include="costing\operations.py" />
     <Compile Include="costing\persistence.py" />
-    <Compile Include="costing\materials.py" />
-    <Compile Include="costing\common.py" />
-    <Compile Include="costing\calculator.py" />
-    <Compile Include="utils\dataframes.py" />
+    <Compile Include="repositories\__init__.py" />
+    <Compile Include="repositories\costing.py" />
+    <Compile Include="repositories\erp.py" />
     <Compile Include="utils\erp_cursor.py" />
     <Compile Include="utils\queries.py" />
+    <Compile Include="web\__init__.py" />
+    <Compile Include="web\app.py" />
+    <Compile Include="web\dependencies.py" />
+    <Compile Include="web\paths.py" />
+    <Compile Include="web\schemas.py" />
+    <Compile Include="web\serialization.py" />
+    <Compile Include="web\services.py" />
+    <Compile Include="web\routers\__init__.py" />
+    <Compile Include="web\routers\admin.py" />
+    <Compile Include="web\routers\catalog.py" />
+    <Compile Include="web\routers\costs.py" />
+    <Compile Include="web\routers\settings.py" />
+    <Compile Include="web\routers\system.py" />
+    <Compile Include="tests\__init__.py" />
+    <Compile Include="tests\costing_fixtures.py" />
+    <Compile Include="tests\test_api_contract.py" />
+    <Compile Include="tests\test_authentication.py" />
+    <Compile Include="tests\test_calculator.py" />
+    <Compile Include="tests\test_conversion_calculator.py" />
+    <Compile Include="tests\test_costing_common.py" />
+    <Compile Include="tests\test_materials.py" />
+    <Compile Include="tests\test_operations.py" />
+    <Compile Include="tests\test_persistence.py" />
+    <Compile Include="tests\test_queries.py" />
+    <Compile Include="tests\test_update_contract.py" />
+    <Compile Include="tests\test_user_management.py" />
+    <Compile Include="tools\erp_query.py" />
+    <Compile Include="tools\hash_password.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include=".dockerignore" />
+    <Content Include=".env.example" />
+    <Content Include=".gitattributes" />
+    <Content Include=".gitignore" />
+    <Content Include="compose.yaml" />
+    <Content Include="Dockerfile" />
+    <Content Include="notes.txt" />
+    <Content Include="package.json" />
+    <Content Include="pnpm-lock.yaml" />
+    <Content Include="pnpm-workspace.yaml" />
+    <Content Include="README.md" />
+    <Content Include="requirements.txt" />
+    <Content Include="database\README.md" />
+    <Content Include="database\reset_schema.sql" />
+    <Content Include="database\migrations\001_migrate_operation_sequence_identity.sql" />
+    <Content Include="database\migrations\002_add_snapshot_columns.sql" />
+    <Content Include="database\migrations\003_add_part_cost_history_indexes.sql" />
+    <Content Include="deployment\Caddyfile" />
+    <Content Include="deployment\DEPLOYMENT.md" />
+    <Content Include="deployment\start-app.sh" />
+    <Content Include="docs\ARCHITECTURE.md" />
+    <Content Include="frontend\src\api\client.js" />
+    <Content Include="frontend\src\App.jsx" />
+    <Content Include="frontend\src\components\AutocompleteField.jsx" />
+    <Content Include="frontend\src\components\inputs.jsx" />
+    <Content Include="frontend\src\components\ui.jsx" />
+    <Content Include="frontend\src\domain\calculations.js" />
+    <Content Include="frontend\src\domain\formatting.js" />
+    <Content Include="frontend\src\domain\model.js" />
+    <Content Include="frontend\src\features\admin\UserManagementModal.jsx" />
+    <Content Include="frontend\src\features\conversion\MaterialPriceEditor.jsx" />
+    <Content Include="frontend\src\features\explorers\Explorers.jsx" />
+    <Content Include="frontend\src\features\home\StartScreen.jsx" />
+    <Content Include="frontend\src\features\settings\Settings.jsx" />
+    <Content Include="frontend\src\features\updates\UpdateNotice.jsx" />
+    <Content Include="frontend\src\features\workspace\FocusEditor.jsx" />
+    <Content Include="frontend\src\features\workspace\LineList.jsx" />
+    <Content Include="frontend\src\features\workspace\OperationCalendar.jsx" />
+    <Content Include="frontend\src\features\workspace\Review.jsx" />
+    <Content Include="frontend\src\features\workspace\validation.js" />
+    <Content Include="frontend\src\features\workspace\Workspace.jsx" />
+    <Content Include="frontend\src\main.jsx" />
+    <Content Include="frontend\src\styles\base.css" />
+    <Content Include="frontend\src\styles\forms.css" />
+    <Content Include="frontend\src\styles\home.css" />
+    <Content Include="frontend\src\styles\index.css" />
+    <Content Include="frontend\src\styles\modals.css" />
+    <Content Include="frontend\src\styles\workspace.css" />
+    <Content Include="frontend\tests\calculations.test.js" />
+    <Content Include="secrets\README.md" />
+    <Content Include="static\index.html" />
+    <Content Include="tools\build-frontend.mjs" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include="cost_env\">
@@ -46,24 +134,35 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="costing\" />
-    <Folder Include="utils\" />
+    <Folder Include="database\" />
+    <Folder Include="database\migrations\" />
+    <Folder Include="deployment\" />
+    <Folder Include="docs\" />
+    <Folder Include="frontend\" />
+    <Folder Include="frontend\src\" />
+    <Folder Include="frontend\src\api\" />
+    <Folder Include="frontend\src\components\" />
+    <Folder Include="frontend\src\domain\" />
+    <Folder Include="frontend\src\features\" />
+    <Folder Include="frontend\src\features\admin\" />
+    <Folder Include="frontend\src\features\conversion\" />
+    <Folder Include="frontend\src\features\explorers\" />
+    <Folder Include="frontend\src\features\home\" />
+    <Folder Include="frontend\src\features\settings\" />
+    <Folder Include="frontend\src\features\updates\" />
+    <Folder Include="frontend\src\features\workspace\" />
+    <Folder Include="frontend\src\styles\" />
+    <Folder Include="frontend\tests\" />
+    <Folder Include="repositories\" />
+    <Folder Include="secrets\" />
     <Folder Include="static\" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="create_costing_tables.sql" />
-    <Content Include="notes.txt" />
-    <Content Include="static\styles.css" />
-    <Content Include="static\app.jsx" />
-    <Content Include="static\index.html" />
-    <Content Include="requirements.txt" />
+    <Folder Include="tests\" />
+    <Folder Include="tools\" />
+    <Folder Include="utils\" />
+    <Folder Include="web\" />
+    <Folder Include="web\routers\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
-  <!-- Uncomment the CoreCompile target to enable the Build command in
-       Visual Studio and specify your pre- and post-build commands in
-       the BeforeBuild and AfterBuild targets below. -->
-  <!--<Target Name="CoreCompile" />-->
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
+  <Target Name="BeforeBuild" />
+  <Target Name="AfterBuild" />
 </Project>

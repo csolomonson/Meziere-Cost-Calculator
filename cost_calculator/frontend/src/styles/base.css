@@ -1,0 +1,76 @@
+/* Application styles are bundled from frontend source. */
+:root {
+  --bg: #eef2f6;
+  --panel: #fff;
+  --soft: #f7f9fc;
+  --ink: #162033;
+  --muted: #657085;
+  --line: #d6deea;
+  --line-strong: #aebbd0;
+  --blue: #245bd6;
+  --blue-soft: #eaf1ff;
+  --green: #067647;
+  --green-soft: #ecfdf3;
+  --amber: #b54708;
+  --amber-soft: #fff7ed;
+  --red: #b42318;
+  --red-soft: #fff1f0;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 14px 34px rgba(16, 24, 40, .07);
+  color: var(--ink);
+  font-family: Inter, Segoe UI, Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); margin: 0; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.button {
+  align-items: center;
+  background: var(--blue);
+  border: 1px solid #1e4eb8;
+  border-radius: 7px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 850;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+}
+.button.secondary { background: #fff; border-color: var(--line-strong); color: var(--ink); }
+.button.danger { background: var(--red-soft); border-color: #fecdca; color: var(--red); }
+.button:disabled { cursor: not-allowed; opacity: .55; }
+input {
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--ink);
+  min-height: 34px;
+  outline: none;
+  padding: 6px 9px;
+  width: 100%;
+}
+input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+h1, h2, h3, p { margin-top: 0; }
+.eyebrow {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.badge {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 950;
+  padding: 3px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.badge.blue { background: var(--blue-soft); border-color: #bfd3ff; color: #1d4ea8; }
+.badge.green { background: var(--green-soft); border-color: #abefc6; color: var(--green); }
+.badge.amber { background: var(--amber-soft); border-color: #fedf89; color: var(--amber); }
+.badge.red { background: var(--red-soft); border-color: #fecdca; color: var(--red); }
+

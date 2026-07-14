@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+cost_env
+node_modules
+.pnpm-store
+static/dist
+__pycache__
+*.pyc
+.pytest_cache
+secrets
+out*.csv
+notes.txt
