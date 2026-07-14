@@ -1,5 +1,9 @@
 # Production deployment design
 
+The primary deployment target is now a native Windows service behind IIS. Follow
+[`WINDOWS.md`](WINDOWS.md) for installation and operations. The container design
+below remains an alternative for a Linux container host.
+
 ## What is implemented
 
 - Every page and API route except the process health probe requires a user and password.
@@ -42,7 +46,7 @@ Normal application and database operation require no internet connection. For a 
 
 The UI should say **Update status unavailable while offline**, while continuing to serve the installed version.
 
-## Before first production start
+## Before first container production start
 
 1. Create `secrets/db_password.txt` and `secrets/app_users.json` as described in `secrets/README.md`.
 2. Copy `.env.example` to `.env` and set the database server and names; do not put passwords there. A fixed SQL Server TCP port (`server,port`) is more reliable from Linux containers than named-instance discovery.

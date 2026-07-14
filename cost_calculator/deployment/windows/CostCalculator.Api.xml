@@ -1,0 +1,18 @@
+<service>
+  <id>CostCalculatorApi</id>
+  <name>Product Cost Calculator API</name>
+  <description>Runs the native FastAPI service for the Product Cost Calculator.</description>
+  <executable>%BASE%\..\..\cost_env\Scripts\python.exe</executable>
+  <arguments>"%BASE%\run_api.py" --config "%PROGRAMDATA%\CostCalculator\native-settings.json"</arguments>
+  <workingdirectory>%BASE%\..\..</workingdirectory>
+  <logpath>%PROGRAMDATA%\CostCalculator\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+  <stoptimeout>30 sec</stoptimeout>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <startmode>Automatic</startmode>
+</service>

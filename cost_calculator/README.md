@@ -107,7 +107,12 @@ numbered files in `database/migrations/` in order.
 
 ## Production
 
-Create the two mounted secret files described in
+The primary production target is now a native Windows service behind IIS. See
+[`deployment/WINDOWS.md`](deployment/WINDOWS.md) for the Server 2019 prerequisites,
+service installation, IIS reverse proxy, secrets, upgrades, and rollback procedure.
+The existing Docker Compose deployment remains available as an alternative.
+
+For the container deployment, create the two mounted secret files described in
 [`secrets/README.md`](secrets/README.md), configure non-secret database values in
 `.env`, and run:
 

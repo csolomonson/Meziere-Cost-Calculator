@@ -64,6 +64,7 @@
     <Compile Include="tests\test_queries.py" />
     <Compile Include="tests\test_update_contract.py" />
     <Compile Include="tests\test_user_management.py" />
+    <Compile Include="tests\test_windows_runner.py" />
     <Compile Include="tools\erp_query.py" />
     <Compile Include="tools\hash_password.py" />
   </ItemGroup>
@@ -87,7 +88,14 @@
     <Content Include="database\migrations\003_add_part_cost_history_indexes.sql" />
     <Content Include="deployment\Caddyfile" />
     <Content Include="deployment\DEPLOYMENT.md" />
+    <Content Include="deployment\WINDOWS.md" />
     <Content Include="deployment\start-app.sh" />
+    <Content Include="deployment\windows\CostCalculator.Api.xml" />
+    <Content Include="deployment\windows\iis-web.config" />
+    <Content Include="deployment\windows\Install-Native.ps1" />
+    <Content Include="deployment\windows\native-settings.example.json" />
+    <Content Include="deployment\windows\Uninstall-Native.ps1" />
+    <Compile Include="deployment\windows\run_api.py" />
     <Content Include="docs\ARCHITECTURE.md" />
     <Content Include="frontend\src\api\client.js" />
     <Content Include="frontend\src\App.jsx" />
@@ -137,6 +145,7 @@
     <Folder Include="database\" />
     <Folder Include="database\migrations\" />
     <Folder Include="deployment\" />
+    <Folder Include="deployment\windows\" />
     <Folder Include="docs\" />
     <Folder Include="frontend\" />
     <Folder Include="frontend\src\" />
