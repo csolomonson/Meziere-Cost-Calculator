@@ -11,3 +11,9 @@ __pycache__
 secrets
 out*.csv
 notes.txt
+deployment/windows
+deployment/WINDOWS.md
+reporting/Build-Renderer.ps1
+reporting/CrystalReportRenderer
+reporting/crystal.py
+reports

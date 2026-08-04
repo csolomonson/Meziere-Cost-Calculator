@@ -36,6 +36,8 @@
     <Compile Include="repositories\__init__.py" />
     <Compile Include="repositories\costing.py" />
     <Compile Include="repositories\erp.py" />
+    <Compile Include="reporting\__init__.py" />
+    <Compile Include="reporting\reportlab.py" />
     <Compile Include="utils\erp_cursor.py" />
     <Compile Include="utils\queries.py" />
     <Compile Include="web\__init__.py" />
@@ -49,6 +51,7 @@
     <Compile Include="web\routers\admin.py" />
     <Compile Include="web\routers\catalog.py" />
     <Compile Include="web\routers\costs.py" />
+    <Compile Include="web\routers\reports.py" />
     <Compile Include="web\routers\settings.py" />
     <Compile Include="web\routers\system.py" />
     <Compile Include="tests\__init__.py" />
@@ -58,14 +61,19 @@
     <Compile Include="tests\test_calculator.py" />
     <Compile Include="tests\test_conversion_calculator.py" />
     <Compile Include="tests\test_costing_common.py" />
+    <Compile Include="tests\test_deployment_preflight.py" />
     <Compile Include="tests\test_materials.py" />
     <Compile Include="tests\test_operations.py" />
     <Compile Include="tests\test_persistence.py" />
     <Compile Include="tests\test_queries.py" />
+    <Compile Include="tests\test_readiness.py" />
+    <Compile Include="tests\test_reporting.py" />
     <Compile Include="tests\test_update_contract.py" />
     <Compile Include="tests\test_user_management.py" />
     <Compile Include="tests\test_windows_runner.py" />
     <Compile Include="tools\erp_query.py" />
+    <Compile Include="tools\deployment_preflight.py" />
+    <Compile Include="tools\create_user_seed.py" />
     <Compile Include="tools\hash_password.py" />
   </ItemGroup>
   <ItemGroup>
@@ -88,8 +96,12 @@
     <Content Include="database\migrations\003_add_part_cost_history_indexes.sql" />
     <Content Include="deployment\Caddyfile" />
     <Content Include="deployment\DEPLOYMENT.md" />
+    <Content Include="deployment\UBUNTU.md" />
     <Content Include="deployment\WINDOWS.md" />
     <Content Include="deployment\start-app.sh" />
+    <Content Include="deployment\ubuntu\install.sh" />
+    <Content Include="deployment\ubuntu\rollback.sh" />
+    <Content Include="deployment\ubuntu\verify.sh" />
     <Content Include="deployment\windows\CostCalculator.Api.xml" />
     <Content Include="deployment\windows\iis-web.config" />
     <Content Include="deployment\windows\Install-Native.ps1" />
@@ -97,6 +109,7 @@
     <Content Include="deployment\windows\Uninstall-Native.ps1" />
     <Compile Include="deployment\windows\run_api.py" />
     <Content Include="docs\ARCHITECTURE.md" />
+    <Content Include="docs\REPORTING.md" />
     <Content Include="frontend\src\api\client.js" />
     <Content Include="frontend\src\App.jsx" />
     <Content Include="frontend\src\components\AutocompleteField.jsx" />
@@ -105,6 +118,7 @@
     <Content Include="frontend\src\domain\calculations.js" />
     <Content Include="frontend\src\domain\formatting.js" />
     <Content Include="frontend\src\domain\model.js" />
+    <Content Include="frontend\src\domain\reports.js" />
     <Content Include="frontend\src\features\admin\UserManagementModal.jsx" />
     <Content Include="frontend\src\features\conversion\MaterialPriceEditor.jsx" />
     <Content Include="frontend\src\features\explorers\Explorers.jsx" />
@@ -163,6 +177,7 @@
     <Folder Include="frontend\src\styles\" />
     <Folder Include="frontend\tests\" />
     <Folder Include="repositories\" />
+    <Folder Include="reporting\" />
     <Folder Include="secrets\" />
     <Folder Include="static\" />
     <Folder Include="tests\" />

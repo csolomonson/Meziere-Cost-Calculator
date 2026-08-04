@@ -29,6 +29,7 @@ class CalculatorMode:
 
 
 MATERIAL_PRESETS = (
+    {'key': 'none', 'label': 'No Conversion', 'multiplier': 1},
     {"key": "aluminum", "label": "Aluminium", "multiplier": 0.0983},
     {"key": "brass", "label": "Brass", "multiplier": 0.3067},
     {"key": "steel", "label": "Stainless / steel / alloy", "multiplier": 0.2836},
@@ -42,6 +43,9 @@ def _rectangular_area(values):
 
 def _round_area(values):
     return pi * (values["diameter"] ** 2 - values["holeDiameter"] ** 2) / 4
+
+def _quantity_convert(values):
+    return values['purchase'] / values['inventory']
 
 
 # Add or modify calculator modes here. The frontend renders these fields
@@ -65,10 +69,19 @@ MODES = (
         ),
         area=_round_area,
     ),
+    CalculatorMode(
+        key='quantity',
+        label='Quantity',
+        fields = (
+            CalculatorField('purchase', 'Purchase Quantity'),
+            CalculatorField('inventory', 'Inventory Quantity')
+            ),
+        area=_quantity_convert
+        )
 )
 
 DEFAULT_MODE = "rectangular"
-DEFAULT_PRESET = "aluminum"
+DEFAULT_PRESET = "none"
 
 
 def calculator_config():

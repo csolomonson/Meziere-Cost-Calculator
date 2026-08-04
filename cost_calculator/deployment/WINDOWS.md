@@ -1,4 +1,9 @@
-# Native Windows Server deployment
+# Retired Windows Server deployment (historical reference)
+
+This path is no longer supported for production. The approved target is the Ubuntu
+VM described in [`UBUNTU.md`](UBUNTU.md). These instructions are retained only to
+preserve earlier deployment work during migration and must not be used for the
+August 17, 2026 rollout.
 
 This is the primary production deployment for Windows Server 2019. The FastAPI
 application runs as a native Windows service on localhost. IIS owns the public
@@ -31,6 +36,8 @@ Install the following on Windows Server 2019:
 - Node.js and pnpm only when the frontend will be built on the server;
 - WinSW 2.12 (.NET Framework executable), transferred through the approved
   software-distribution process.
+- SAP Crystal Reports 64-bit runtime at the same service-pack level used to build
+  the report renderer.
 
 WinSW is not committed to this repository. Keep the downloaded executable with
 the release artifacts and verify its checksum before installation.
@@ -39,7 +46,10 @@ the release artifacts and verify its checksum before installation.
 
 Prefer building and testing on a build machine, then copying an immutable release
 directory to the server. The directory must include `static\dist\app.js` and
-`static\dist\app.css`; those generated files are not tracked in Git.
+`static\dist\app.css`; those generated files are not tracked in Git. To enable
+PDF reports, it must also include the Release output from
+`reporting\Build-Renderer.ps1` and `reports\PartCost.rpt`. See
+[`../docs/REPORTING.md`](../docs/REPORTING.md).
 
 Before the first installation, create these ignored files in the release:
 
@@ -114,7 +124,9 @@ For an upgrade:
 4. Install the new release from its directory using the existing WinSW binary and
    `-SkipFrontendBuild` when the bundle is already present.
 5. Run the health, authentication, database-read, and save checks.
-6. Retain the previous release directory until verification is complete.
+6. Open a saved worksheet's PDF and verify the report connects to the production
+   costing database.
+7. Retain the previous release directory until verification is complete.
 
 Rollback by stopping the service and reinstalling it from the previous release
 directory. Database migrations require their own documented rollback or restore;

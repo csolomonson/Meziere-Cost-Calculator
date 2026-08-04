@@ -28,8 +28,9 @@ export function processTimingFields(process, row) {
     ucoCycleTimeHours: productionStandard > 0 ? productionStandard / 60 : toNumber(row.ucoCycleTimeHours),
   };
 }
-export function materialSource(row) { if (row?.ucmBackflush === false || row?.ucmBackflush === 0) return { label: "Not backflushed", tone: "neutral" }; if (row?.ucmCostSource === "manufactured_current") return { label: "Manufactured current", tone: "green" }; if (row?.ucmCostSource === "manufactured_history") return { label: "Manufactured history", tone: "green" }; if (row?.ucmCostSource === "manufactured_route") return { label: "Manufactured route", tone: "blue" }; if (row?.ucmIsPurchased || row?.ucmCostSource === "purchase_order") return { label: "Purchased", tone: "amber" }; return { label: "Manufactured/internal", tone: "blue" }; }
-export function materialIsManufactured(row) { return !row?.ucmIsPurchased && (String(row?.ucmCostSource || "").startsWith("manufactured_") || row?.ucmHasManufacturingDetail || row?.ucmCostSource === "erp_estimate" || row?.ucmCostSource === "manual"); }
+export function materialSource(row) { if (row?.ucmCostSource === "manual_override") return { label: "Manual unit cost", tone: "amber" }; if (row?.ucmBackflush === false || row?.ucmBackflush === 0) return { label: "Not backflushed", tone: "neutral" }; if (row?.ucmCostSource === "manufactured_current") return { label: "Manufactured current", tone: "green" }; if (row?.ucmCostSource === "manufactured_history") return { label: "Manufactured history", tone: "green" }; if (row?.ucmCostSource === "manufactured_route") return { label: "Manufactured route", tone: "blue" }; if (row?.ucmIsPurchased || row?.ucmCostSource === "purchase_order") return { label: "Purchased", tone: "amber" }; return { label: "Manufactured/internal", tone: "blue" }; }
+export function materialIsManufactured(row) { return !row?.ucmIsPurchased && (String(row?.ucmCostSource || "").startsWith("manufactured_") || row?.ucmHasManufacturingDetail || row?.ucmCostSource === "erp_estimate" || row?.ucmCostSource === "manual" || row?.ucmCostSource === "manual_override"); }
+export function materialUsesCurrentCostRun(row) { return Boolean(row?.ucmManufacturedPartCostID) && (row?.ucmCostSource === "manufactured_current" || row?.ucmManufacturedPartCostIsCurrent === true || row?.ucmManufacturedPartCostIsCurrent === 1); }
 export function materialHasNoRoute(row) { return !row?.ucmIsPurchased && row?.ucmHasManufacturingDetail === false && toNumber(row?.ucmManufacturingMaterialCount) === 0 && toNumber(row?.ucmManufacturingOperationCount) === 0; }
 export function materialNeedsPartCostUpdate(row) { return !row?.ucmIsPurchased && row?.ucmMaterialID && row?.ucmCostSource === "manufactured_history" && (!row.ucmManufacturedPartCostID || row.ucmManufacturedPartCostIsCurrent === false || row.ucmManufacturedPartCostIsCurrent === 0); }
 export function pct(start, duration, day) { const left = Math.max(0, Math.min(24, start - day * 24)); const right = Math.max(0, Math.min(24, start + duration - day * 24)); return { left: left / 24 * 100, width: Math.max(0, (right - left) / 24 * 100) }; }
@@ -130,6 +131,24 @@ export function lineBreakdownFromUnit(row, unitBreakdown) {
   const required = toNumber(row.ucmQtyPerAssembly) * (toNumber(row.ucmCostQuantity) || 1);
   const buy = purchasedQuantity(required, row.ucmMinimumPurchaseQty, row.ucmIsPurchased);
   return costBuckets.reduce((out, bucket) => ({ ...out, [bucket.materialRaw]: buy * toNumber(unitBreakdown[bucket.materialRaw]) }), {});
+}
+export function manualMaterialCostOverride(row, value) {
+  const unitCost = toNumber(value);
+  const manufactured = { ...row, ucmIsPurchased: false };
+  return {
+    ...manufactured,
+    ...lineBreakdownFromUnit(manufactured, {
+      ucmMaterialsRawCost: unitCost,
+      ucmMachineTimeRawCost: 0,
+      ucmLaborRawCost: 0,
+      ucmExternalOperationsRawCost: 0,
+      ucmAdditionalRawCost: 0,
+    }),
+    ucmUnitCost: unitCost,
+    ucmCostSource: "manual_override",
+    ucmManufacturedPartCostID: null,
+    ucmManufacturedPartCostIsCurrent: false,
+  };
 }
 export function recalcMaterials(rows, quantity, markupBreaks) {
   const activeBreak = activeMarkupBreak(markupBreaks, quantity);

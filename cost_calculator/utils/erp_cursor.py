@@ -14,6 +14,13 @@ ODBC_DRIVER = setting("COST_DB_DRIVER", "ODBC Driver 17 for SQL Server")
 # The existing local SQL instance uses its own certificate. Containers override
 # this to false by default so production must establish certificate trust.
 TRUST_SERVER_CERTIFICATE = boolean_setting("COST_DB_TRUST_SERVER_CERTIFICATE", True)
+try:
+    CONNECTION_TIMEOUT = min(
+        60,
+        max(1, int(setting("COST_DB_CONNECTION_TIMEOUT_SECONDS", "5") or "5")),
+    )
+except ValueError:
+    CONNECTION_TIMEOUT = 5
 
 
 def make_engine(database):
@@ -25,6 +32,7 @@ def make_engine(database):
         f"PWD={PWD};"
         "Encrypt=yes;"
         f"TrustServerCertificate={'yes' if TRUST_SERVER_CERTIFICATE else 'no'};"
+        f"Connection Timeout={CONNECTION_TIMEOUT};"
     )
     return create_engine(f"mssql+pyodbc:///?odbc_connect={quote_plus(odbc_str)}")
 

@@ -88,8 +88,28 @@ export function App() {
       }
       if (!quantity) quantity = toNumber(material.ucmTotalQuantityRequired) || toNumber(material.ucmQtyPerAssembly) || 1;
       const normalized = await loadCostRun(material.ucmMaterialID, "", quantity);
+      setWorkspaceInitialView(null);
       setReturnStack((stack) => [...stack, parent]);
       setDraft({ part_id: material.ucmMaterialID, revision_id: "", quantity });
+      setRun(normalized);
+      setOriginal(JSON.parse(JSON.stringify(normalized)));
+      setModeState("workspace");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function openMaterialSourceCost(material) {
+    if (!material?.ucmManufacturedPartCostID || !run) return;
+    try {
+      setLoading(true);
+      setError("");
+      const parent = { run, original, draft, label: run.part_cost.ucpPartID || "parent cost", materialLineId: material._id, materialId: material.ucmMaterialID };
+      const normalized = await loadSavedCostRun(material.ucmManufacturedPartCostID);
+      setWorkspaceInitialView(null);
+      setReturnStack((stack) => [...stack, parent]);
+      setDraft({ part_id: normalized.part_cost.ucpPartID || material.ucmMaterialID || "", revision_id: normalized.part_cost.ucpPartRevision || "", quantity: normalized.part_cost.ucpCostQuantity || 1 });
       setRun(normalized);
       setOriginal(JSON.parse(JSON.stringify(normalized)));
       setModeState("workspace");
@@ -143,6 +163,6 @@ export function App() {
     });
   }
   const returnCrumb = returnStack.length ? returnStack[returnStack.length - 1].label : "";
-  return <><UpdateNotice />{mode === "workspace" && run ? <Workspace key={(run.part_cost.ucpPartCostID || run.part_cost.ucpPartID || "cost") + "-" + returnStack.length + "-" + (workspaceInitialView || "review")} run={run} setRun={setRun} original={original} setOriginal={setOriginal} setMode={setMode} draft={draft} onCostMaterial={costMaterial} returnCrumb={returnCrumb} onReturnToParent={returnToParent} onReturnWithUnitCost={returnWithUnitCost} landingFocus={landingFocus} onLandingHandled={() => setLandingFocus(null)} initialView={workspaceInitialView} /> : <StartScreen draft={draft} setDraft={setDraft} loadErp={loadErp} startBlank={startBlank} openSettings={openSettings} openSavedCost={openSavedCost} openUserManagement={() => setShowUserManagement(true)} isAdministrator={(session?.groups || []).includes("administrators")} loading={loading} error={error} />}{showUserManagement && <UserManagementModal onClose={() => setShowUserManagement(false)} />}<CostHistoryModal target={startHistory} onClose={() => setStartHistory(null)} onUseRun={async (history) => { try { setLoading(true); const normalized = await loadSavedCostRun(history.ucpPartCostID); setStartHistory(null); await openRun(normalized, { part_id: history.ucpPartID, revision_id: history.ucpPartRevision || "", quantity: history.ucpCostQuantity }); } catch (err) { setError(err.message); } finally { setLoading(false); } }} onNewRun={async () => { try { setLoading(true); const target = startHistory; setStartHistory(null); setDraft((current) => ({ ...current, part_id: target.partId, revision_id: target.revisionId, quantity: target.quantity })); const normalized = await loadCostRun(target.partId, target.revisionId, target.quantity); await openRun(normalized, { part_id: target.partId, revision_id: target.revisionId, quantity: target.quantity }); } catch (err) { setError(err.message); } finally { setLoading(false); } }} onSetCurrent={async (history) => { await readApiResponse(await fetch("/api/costs/current", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ part_cost_id: history.ucpPartCostID }) })); setStartHistory((target) => target ? { ...target, rows: target.rows.map((row) => ({ ...row, ucpIsCurrent: row.ucpPartCostID === history.ucpPartCostID })) } : target); }} /></>;
+  return <><UpdateNotice />{mode === "workspace" && run ? <Workspace key={(run.part_cost.ucpPartCostID || run.part_cost.ucpPartID || "cost") + "-" + returnStack.length + "-" + (workspaceInitialView || "review")} run={run} setRun={setRun} original={original} setOriginal={setOriginal} setMode={setMode} draft={draft} onCostMaterial={costMaterial} onOpenMaterialSourceCost={openMaterialSourceCost} returnCrumb={returnCrumb} onReturnToParent={returnToParent} onReturnWithUnitCost={returnWithUnitCost} landingFocus={landingFocus} onLandingHandled={() => setLandingFocus(null)} initialView={workspaceInitialView} /> : <StartScreen draft={draft} setDraft={setDraft} loadErp={loadErp} startBlank={startBlank} openSettings={openSettings} openSavedCost={openSavedCost} openUserManagement={() => setShowUserManagement(true)} isAdministrator={(session?.groups || []).includes("administrators")} loading={loading} error={error} />}{showUserManagement && <UserManagementModal onClose={() => setShowUserManagement(false)} />}<CostHistoryModal target={startHistory} onClose={() => setStartHistory(null)} onUseRun={async (history) => { try { setLoading(true); const normalized = await loadSavedCostRun(history.ucpPartCostID); setStartHistory(null); await openRun(normalized, { part_id: history.ucpPartID, revision_id: history.ucpPartRevision || "", quantity: history.ucpCostQuantity }); } catch (err) { setError(err.message); } finally { setLoading(false); } }} onNewRun={async () => { try { setLoading(true); const target = startHistory; setStartHistory(null); setDraft((current) => ({ ...current, part_id: target.partId, revision_id: target.revisionId, quantity: target.quantity })); const normalized = await loadCostRun(target.partId, target.revisionId, target.quantity); await openRun(normalized, { part_id: target.partId, revision_id: target.revisionId, quantity: target.quantity }); } catch (err) { setError(err.message); } finally { setLoading(false); } }} onSetCurrent={async (history) => { await readApiResponse(await fetch("/api/costs/current", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ part_cost_id: history.ucpPartCostID }) })); setStartHistory((target) => target ? { ...target, rows: target.rows.map((row) => ({ ...row, ucpIsCurrent: row.ucpPartCostID === history.ucpPartCostID })) } : target); }} /></>;
 }
 

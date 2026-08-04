@@ -12,6 +12,7 @@
   "COST_APP_PORT": 8000,
   "COST_APP_WORKERS": 2,
   "COST_APP_FORWARDED_ALLOW_IPS": "127.0.0.1",
+  "CRYSTAL_RENDER_TIMEOUT_SECONDS": 60,
   "APP_VERSION": "development",
   "APP_REPOSITORY": "",
   "UPDATE_STATUS_FILE": "C:\\ProgramData\\CostCalculator\\update\\update-status.json",

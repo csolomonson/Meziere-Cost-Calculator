@@ -1,5 +1,7 @@
-fastapi>=0.115
-uvicorn[standard]>=0.30
-pandas>=3.0
-SQLAlchemy>=2.0
-pyodbc>=5.0
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pandas==3.0.3
+SQLAlchemy==2.0.51
+pyodbc==5.3.0
+reportlab==5.0.0
+pypdf==6.14.2

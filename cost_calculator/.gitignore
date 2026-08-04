@@ -8,3 +8,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 deployment/windows/CostCalculator.Api.exe
+reporting/CrystalReportRenderer/bin/
+reporting/CrystalReportRenderer/obj/
+deployment/runtime/
+deployment/sql-ca/*.crt

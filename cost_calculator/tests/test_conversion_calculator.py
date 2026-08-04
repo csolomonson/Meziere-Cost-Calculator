@@ -9,9 +9,12 @@ class ConversionCalculatorTests(unittest.TestCase):
         config = calculator_config()
 
         self.assertEqual(config["default_mode"], "rectangular")
-        self.assertEqual([mode["key"] for mode in config["modes"]], ["rectangular", "round"])
+        self.assertEqual(
+            [mode["key"] for mode in config["modes"]],
+            ["rectangular", "round", "quantity"],
+        )
         self.assertEqual(config["modes"][0]["fields"][0]["key"], "height")
-        self.assertEqual(config["default_preset"], "aluminum")
+        self.assertEqual(config["default_preset"], "none")
 
     def test_rectangular_factor(self):
         result = calculate_conversion("rectangular", {"height": 2, "width": 3}, 0.5)

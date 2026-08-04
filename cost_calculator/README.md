@@ -22,6 +22,7 @@ secrets, and update-supervisor design, see
 | `static/` | HTML shell and generated production bundles |
 | `tests/`, `frontend/tests/` | Backend contracts and pure frontend-domain tests |
 | `database/` | Destructive schema reset and ordered, data-preserving migrations |
+| `reporting/` | Cross-platform ReportLab PDF documents for saved costing runs |
 | `deployment/`, `secrets/` | Production runtime and secret-file documentation |
 
 ## Local setup
@@ -82,7 +83,7 @@ after-hours timing, and cost recalculation relationships.
 
 ## API organization
 
-All routes except `GET /api/health` require HTTP Basic authentication. The root page
+All routes except `GET /api/health` and `GET /api/ready` require HTTP Basic authentication. The root page
 receives the authenticated session, and saved costs are attributed to that user even
 if a client submits a different `costed_by` value.
 
@@ -94,6 +95,8 @@ The API is grouped as follows:
   purchase orders;
 - settings: global/part markup breaks and machine/shift defaults;
 - administration: file-backed user management for the `administrators` group;
+- reporting: authenticated inline PDFs for saved `PartCostID` values under
+  `/api/reports`;
 - system: health, session, version, update contract, and conversion calculator.
 
 When running locally, the authenticated OpenAPI UI is available at `/docs`.
@@ -107,17 +110,17 @@ numbered files in `database/migrations/` in order.
 
 ## Production
 
-The primary production target is now a native Windows service behind IIS. See
-[`deployment/WINDOWS.md`](deployment/WINDOWS.md) for the Server 2019 prerequisites,
-service installation, IIS reverse proxy, secrets, upgrades, and rollback procedure.
-The existing Docker Compose deployment remains available as an alternative.
+The supported production target is an Ubuntu Server 24.04 LTS VM running Docker
+Compose. See [`deployment/UBUNTU.md`](deployment/UBUNTU.md) for the preparation,
+rehearsal, August 17 execution, verification, and rollback runbook. See
+[`docs/REPORTING.md`](docs/REPORTING.md) for the ReportLab PDF design.
 
 For the container deployment, create the two mounted secret files described in
 [`secrets/README.md`](secrets/README.md), configure non-secret database values in
 `.env`, and run:
 
-```powershell
-docker compose up -d --build
+```bash
+sudo bash deployment/ubuntu/install.sh
 ```
 
 Access the application through HTTPS on port 443. The production image contains the

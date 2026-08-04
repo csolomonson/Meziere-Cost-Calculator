@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from authentication import AuthenticationError, authenticate_request
 from web.paths import STATIC_DIR
-from web.routers import admin, catalog, costs, settings, system
+from web.routers import admin, catalog, costs, reports, settings, system
 
 
 app = FastAPI(title="Product Cost Calculator", version="0.1.0")
@@ -16,7 +16,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.middleware("http")
 async def require_authentication(request: Request, call_next):
-    if request.url.path == "/api/health":
+    if request.url.path in {"/api/health", "/api/ready"}:
         return await call_next(request)
     try:
         request.state.principal = authenticate_request(request)
@@ -88,5 +88,6 @@ for feature_router in (
     catalog.router,
     settings.router,
     costs.router,
+    reports.router,
 ):
     _register_routes(feature_router)

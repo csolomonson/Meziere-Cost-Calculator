@@ -1,23 +1,43 @@
 """Health, session, version, update, conversion, and shell routes."""
 
 import json
+import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from sqlalchemy import text
 
 from app_config import setting
 from costing.conversion_calculator import calculate_conversion, calculator_config
 from update_contract import request_update, update_status
+from utils.erp_cursor import app_cnxn, erp_cnxn
 from web.paths import STATIC_DIR
 from web.schemas import ConversionCalculationRequest
 
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/health")
 def health():
     return {"ok": True}
+
+
+@router.get("/api/ready")
+def readiness():
+    """Confirm that both required SQL Server databases are reachable."""
+    unavailable = []
+    for name, engine in (("erp", erp_cnxn), ("costing", app_cnxn)):
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+        except Exception:
+            logger.exception("%s database readiness check failed", name)
+            unavailable.append(name)
+    if unavailable:
+        raise HTTPException(status_code=503, detail="Required database connectivity is unavailable.")
+    return {"ok": True, "databases": ["erp", "costing"]}
 
 
 @router.get("/api/session")
@@ -78,4 +98,3 @@ def index(request: Request):
         "__SESSION_JSON__", session_json
     )
     return HTMLResponse(html)
-

@@ -1,64 +1,67 @@
-# Production deployment design
+# Production deployment
 
-The primary deployment target is now a native Windows service behind IIS. Follow
-[`WINDOWS.md`](WINDOWS.md) for installation and operations. The container design
-below remains an alternative for a Linux container host.
+The supported production target is an Ubuntu Server 24.04 LTS VM running Docker
+Engine and Docker Compose. Caddy is the only published service and exposes HTTPS
+on TCP 443. The FastAPI container is reachable only from the private Compose
+network.
 
-## What is implemented
+For the exact preparation and August 17, 2026 procedure, use
+[`UBUNTU.md`](UBUNTU.md). The day-of deployment command is:
 
-- Every page and API route except the process health probe requires a user and password.
-- Successful password verification is cached as a keyed in-memory digest for five minutes, avoiding an expensive password hash on every API request. Changing the configured password hash invalidates the cache immediately.
-- The authenticated username is written to `PartCosts.ucpCostedBy`; client-supplied values are ignored.
-- User records can already contain `groups`, providing the identity shape needed for later authorization rules.
-- Administrators can add, delete, re-group, and reset passwords from the home screen. The initial secret seeds a persistent writable user volume on first start; subsequent changes remain in that volume.
-- Database and login secrets come from mounted files and are excluded from the image and repository.
-- The browser application is compiled into the image. A running installation does not contact a CDN.
-- Caddy provides HTTPS in front of the application with a locally issued certificate.
-- `/api/version` reports the immutable deployed version and source repository supplied at build/deploy time.
-- `/api/update` and `/api/update/install` provide a file-based contract with a separate supervisor. Only users in the `administrators` group can request installation.
+```bash
+sudo bash deployment/ubuntu/install.sh
+```
 
-## Updates: use a separate, least-privileged supervisor
+The installer is idempotent and fail-fast. It installs Docker from Docker's
+official Ubuntu repository when needed, creates missing configuration and secrets
+interactively, builds a versioned image once, validates both SQL databases and the
+costing schema, starts the containers, waits for database-aware readiness, verifies
+HTTPS, and exports the Caddy root certificate.
 
-The web application must not receive access to the Docker socket, repository write credentials, or permission to replace its own executable. A compromise of an ordinary app login would otherwise become control of the deployment host.
+## Security boundaries
 
-Use this release flow:
+- Only TCP 443 is published by Compose. Port 8000 is never bound to the VM.
+- Both containers use a read-only root filesystem, drop Linux capabilities, and
+  set `no-new-privileges`; Caddy receives only `NET_BIND_SERVICE`.
+- Database and application passwords are mounted as files, excluded from Git, and
+  not baked into images.
+- The application has no Docker socket, host filesystem, SSH key, or update
+  credential.
+- SQL Server uses encrypted ODBC connections. A private CA can be staged under
+  `deployment/sql-ca/` rather than disabling certificate validation.
+- Caddy issues the site certificate from a deployment-local CA. The installer
+  exports the public root for controlled distribution to clients.
+- Application users and Caddy state live in named volumes and survive upgrades.
 
-1. CI builds a versioned image from a Git tag, runs tests, and publishes an image plus its SHA-256 digest. Export the image as an OCI archive for sites that may be offline.
-2. A small host-level update supervisor polls the GitHub Releases API using a read-only token. It writes `update-status.json` into the `update_state` volume consumed by the app. Network failure means `status: offline`, not an application failure.
-3. When an administrator selects **Install update**, the app atomically writes `update-request.json` into that volume. The supervisor downloads the immutable image and verifies the expected digest (and, preferably, a Sigstore signature).
-4. The supervisor starts the candidate beside the current container, waits for process and database readiness checks, then changes the reverse-proxy upstream. Existing requests drain before the old container stops.
-5. If readiness fails, traffic never moves. If post-switch checks fail, the proxy immediately switches back to the previous image.
+`GET /api/health` is a process liveness check. `GET /api/ready` verifies both the
+ERP and costing database connections; Compose uses readiness, so a disconnected
+application cannot be reported healthy.
 
-Track releases or signed tags rather than deploying a moving branch. This gives every installed version an auditable identity and makes rollback deterministic.
+## Releases and rollback
 
-The supervisor must treat both status and request files as untrusted hints: independently resolve the requested version against the configured repository allowlist and verify its signature/digest before taking host-level action.
+Set a unique `APP_VERSION` and matching `COST_APP_IMAGE` tag for every build. Once
+that image exists, the installer treats it as immutable and will not rebuild the
+same tag. A successful upgrade retains the previous image name in
+`deployment/runtime/previous-image`.
 
-The update supervisor is intentionally not included yet: its host integration depends on whether production will use plain Docker Compose, Windows services, Docker Swarm, or Kubernetes. The app-facing version endpoint and container boundary are ready for it.
+Rollback only the application containers with:
 
-## Offline operation
+```bash
+sudo bash deployment/ubuntu/rollback.sh
+```
 
-Normal application and database operation require no internet connection. For a permanently isolated site:
+This does not modify Docker volumes or databases. Database schema changes need a
+separate, tested rollback or restore. For the first deployment, where no prior
+image exists, take the site out of service with `sudo docker compose down`; named
+volumes remain available.
 
-1. Build and test the images on a connected CI worker.
-2. Export both the application and Caddy images to signed archives.
-3. Transfer and import the archives through the site's approved media process.
-4. Give the supervisor a local release manifest directory instead of a GitHub endpoint.
+## Update UI boundary
 
-The UI should say **Update status unavailable while offline**, while continuing to serve the installed version.
+The existing update endpoints are a request/status contract only. The web
+application deliberately cannot install host updates. Do not give it the Docker
+socket. Until a separate signed-release supervisor is implemented, upgrades are
+performed from a reviewed release directory with the installer above.
 
-## Before first container production start
-
-1. Create `secrets/db_password.txt` and `secrets/app_users.json` as described in `secrets/README.md`.
-2. Copy `.env.example` to `.env` and set the database server and names; do not put passwords there. A fixed SQL Server TCP port (`server,port`) is more reliable from Linux containers than named-instance discovery.
-3. Generate and trust Caddy's local root certificate on client machines, or replace `tls internal` with an organization-issued certificate.
-4. Build while connected: `docker compose build`.
-5. Start: `docker compose up -d`.
-6. Confirm that HTTP is not exposed, an incorrect login returns 401, and a saved cost contains the logged-in username.
-7. Back up the application database and rehearse both image rollback and database restore.
-
-## Remaining production hardening
-
-- Choose the deployment platform so the update supervisor can be implemented correctly.
-- Pin Python dependencies with hashes. Frontend dependencies are already pinned by `pnpm-lock.yaml`.
-- Add database-aware readiness checks and structured audit logs for login, save, settings, and update events.
-- Replace local passwords with the organization's identity provider when group privileges are introduced.
+The retired Windows/IIS scripts are preserved for historical reference in
+`deployment/windows`, but they are not a supported production path and are
+excluded from the container build.

@@ -10,14 +10,14 @@ import {
   opInternalFields,
 } from "../../domain/model.js";
 import { formatDuration, toNumber } from "../../domain/formatting.js";
-import { groupedFields, keyFor, machineKey, materialSource, operationTiming, processTimingFields } from "../../domain/calculations.js";
+import { groupedFields, keyFor, machineKey, materialSource, materialUsesCurrentCostRun, operationTiming, processTimingFields } from "../../domain/calculations.js";
 import { AutocompleteField } from "../../components/AutocompleteField.jsx";
 import { Field } from "../../components/inputs.jsx";
 import { Badge, Button, Stat } from "../../components/ui.jsx";
 import { MaterialPriceEditor } from "../conversion/MaterialPriceEditor.jsx";
 import { OperationCalendar } from "./OperationCalendar.jsx";
 
-export function FocusEditor({ kind, row, original, edited, updateRow, updateFields, resetField, refreshDefaults, removeRow, close, openPO, openJobs, applyMaterialSuggestion, updateMachineDefault, openMachineSettings, shift, onCostMaterial, openMaterialHistory }) {
+export function FocusEditor({ kind, row, original, edited, updateRow, updateFields, resetField, overrideMaterialUnitCost, resetMaterialUnitCost, refreshDefaults, removeRow, close, openPO, openJobs, applyMaterialSuggestion, updateMachineDefault, openMachineSettings, shift, onCostMaterial, onOpenMaterialSourceCost, openMaterialHistory }) {
   const [invalidNumericFields, setInvalidNumericFields] = useState(() => new Set());
   const lastValidCalculatedRow = useRef(row);
   const isMaterial = kind === "material";
@@ -43,6 +43,7 @@ export function FocusEditor({ kind, row, original, edited, updateRow, updateFiel
   function renderField(field) {
     if (isMaterial && field === "ucmMaterialID") return null;
     if (isMaterial && field === "ucmUnitCost" && row.ucmIsPurchased) return <MaterialPriceEditor key={field} row={row} edited={changed("ucmUnitCost")} onChange={(values) => updateFields(kind, row._id, values)} onValidityChange={setNumericValidity} />;
+    if (isMaterial && field === "ucmUnitCost") return <Field key={field} field={field} label="Unit material cost" value={row[field]} onChange={(value) => overrideMaterialUnitCost(row._id, value)} onValidityChange={(valid) => setNumericValidity(field, valid)} edited={changed(field)} onReset={() => resetMaterialUnitCost(row._id)} />;
     if (!isMaterial && field === "ucoOperationID") return null;
     if (!isMaterial && field === "ucoWorkCenterID") return null;
     const meta = fieldMap.get(field);
@@ -53,11 +54,11 @@ export function FocusEditor({ kind, row, original, edited, updateRow, updateFiel
     <section className="focus-head">
       <Button tone="secondary" onClick={close}>Save and exit</Button>
       <div><span className="eyebrow">{isMaterial ? "Material" : "Operation"}</span><h2>{isMaterial ? row.ucmMaterialID || "New material" : row.ucoOperationDescription || row.ucoOperationID || "New operation"}</h2></div>
-      <div className="focus-actions"><Button tone="secondary" onClick={() => refreshDefaults(kind, row._id)}>Refresh defaults</Button>{isMaterial && <Button tone="secondary" onClick={() => openMaterialHistory(row)} disabled={!row.ucmMaterialID}>Cost history</Button>}{isMaterial && <Button tone="secondary" onClick={() => openJobs(row)} disabled={!row.ucmMaterialID}>Recent jobs</Button>}{!isMaterial && <Button tone="secondary" onClick={() => openJobs(row)} disabled={!row.ucoPartOperationLineID}>Operation jobs</Button>}{isMaterial && <Button tone="secondary" onClick={() => onCostMaterial(row)} disabled={!row.ucmMaterialID}>New child cost</Button>}{(isMaterial && row.ucmIsPurchased) || (!isMaterial && row.ucoExternalJob) ? <Button tone="secondary" onClick={() => openPO(kind, row)}>PO explorer</Button> : null}<Button tone="danger" onClick={() => removeRow(kind, row._id)}>Delete</Button></div>
+      <div className="focus-actions"><Button tone="secondary" onClick={() => refreshDefaults(kind, row._id)}>Refresh defaults</Button>{isMaterial && <Button tone="secondary" onClick={() => openMaterialHistory(row)} disabled={!row.ucmMaterialID}>Cost history</Button>}{isMaterial && <Button tone="secondary" onClick={() => openJobs(row)} disabled={!row.ucmMaterialID}>Recent jobs</Button>}{!isMaterial && <Button tone="secondary" onClick={() => openJobs(row)} disabled={!row.ucoPartOperationLineID}>Operation jobs</Button>}{isMaterial && materialUsesCurrentCostRun(row) && <Button tone="secondary" onClick={() => onOpenMaterialSourceCost(row)}>Open source run</Button>}{isMaterial && <Button tone="secondary" onClick={() => onCostMaterial(row)} disabled={!row.ucmMaterialID}>New child cost</Button>}{(isMaterial && row.ucmIsPurchased) || (!isMaterial && row.ucoExternalJob) ? <Button tone="secondary" onClick={() => openPO(kind, row)}>PO explorer</Button> : null}<Button tone="danger" onClick={() => removeRow(kind, row._id)}>Delete</Button></div>
     </section>
     <section className="focus-layout">
       <div className="edit-panel grouped">
-        <div className="source-strip">{isMaterial ? <Badge tone={materialSource(row).tone}>{materialSource(row).label}</Badge> : <Badge tone={row.ucoExternalJob ? "amber" : "blue"}>{row.ucoExternalJob ? "External operation" : "Internal operation"}</Badge>}<Badge>{row._source === "erp" ? "ERP seeded" : "manual"}</Badge></div>
+        <div className="source-strip"><span className="source-label">{isMaterial ? "Unit cost source" : "Operation source"}</span>{isMaterial ? <Badge tone={materialSource(row).tone}>{materialSource(row).label}</Badge> : <Badge tone={row.ucoExternalJob ? "amber" : "blue"}>{row.ucoExternalJob ? "External operation" : "Internal operation"}</Badge>}{isMaterial && row.ucmManufacturedPartCostID && <span className="source-reference">Run #{row.ucmManufacturedPartCostID}{materialUsesCurrentCostRun(row) ? " (current)" : ""}</span>}<Badge>{row._source === "erp" ? "ERP line" : row._source === "saved" ? "Saved line" : "Manually added line"}</Badge></div>
         {isMaterial && <AutocompleteField label="Material part number" field="ucmMaterialID" value={row.ucmMaterialID} edited={changed("ucmMaterialID")} searchUrl="/api/parts/search?q=" optionValue={(part) => part.impPartID} renderOption={(part) => <><strong>{part.impPartID}</strong><span>{part.impShortDescription || part.impPartShortDescription || "No description"}</span></>} onChange={(value) => set("ucmMaterialID", value.toUpperCase())} onSelect={(part) => applyMaterialSuggestion(row._id, part)} />}
         {!isMaterial && <div className="operation-pickers">
           <AutocompleteField
@@ -122,5 +123,4 @@ export function FocusEditor({ kind, row, original, edited, updateRow, updateFiel
     </section>
   </main>;
 }
-
 

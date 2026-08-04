@@ -28,6 +28,8 @@ $settingsPath = Join-Path $DataRoot "native-settings.json"
 $secretsRoot = Join-Path $DataRoot "secrets"
 $logsRoot = Join-Path $DataRoot "logs"
 $updateRoot = Join-Path $DataRoot "update"
+$crystalRenderer = Join-Path $AppRoot "reporting\CrystalReportRenderer\bin\Release\CrystalReportRenderer.exe"
+$partCostReport = Join-Path $AppRoot "reports\PartCost.rpt"
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -129,6 +131,13 @@ if (-not $SkipFrontendBuild) {
     throw "The production frontend bundle is missing at $frontendBundle."
 }
 
+if (-not (Test-Path $crystalRenderer)) {
+    Write-Warning "The Crystal renderer is missing. Build reporting\Build-Renderer.ps1 before enabling PDF reports."
+}
+if (-not (Test-Path $partCostReport)) {
+    Write-Warning "reports\PartCost.rpt is missing. The Open PDF endpoint will remain unavailable until the report is deployed."
+}
+
 if ($Reconfigure -or -not (Test-Path $settingsPath)) {
     $settings = [ordered]@{
         COST_APP_AUTH_REQUIRED = $true
@@ -144,6 +153,7 @@ if ($Reconfigure -or -not (Test-Path $settingsPath)) {
         COST_APP_PORT = $Port
         COST_APP_WORKERS = $Workers
         COST_APP_FORWARDED_ALLOW_IPS = "127.0.0.1"
+        CRYSTAL_RENDER_TIMEOUT_SECONDS = 60
         APP_VERSION = $AppVersion
         APP_REPOSITORY = $AppRepository
         UPDATE_STATUS_FILE = (Join-Path $updateRoot "update-status.json")

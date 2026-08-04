@@ -34,6 +34,7 @@ button { cursor: pointer; }
   justify-content: center;
   min-height: 36px;
   padding: 7px 12px;
+  text-decoration: none;
 }
 .button.secondary { background: #fff; border-color: var(--line-strong); color: var(--ink); }
 .button.danger { background: var(--red-soft); border-color: #fecdca; color: var(--red); }
@@ -73,4 +74,3 @@ h1, h2, h3, p { margin-top: 0; }
 .badge.green { background: var(--green-soft); border-color: #abefc6; color: var(--green); }
 .badge.amber { background: var(--amber-soft); border-color: #fedf89; color: var(--amber); }
 .badge.red { background: var(--red-soft); border-color: #fecdca; color: var(--red); }
-

@@ -146,6 +146,8 @@ def enrich_material_lines_from_child_costs(material_lines):
             material_lines[column] = 0.0
 
     for index, line in material_lines.iterrows():
+        if line.get("ucmCostSource") == "manual_override":
+            continue
         child_part_cost_id = line.get("ucmManufacturedPartCostID")
         if child_part_cost_id is None or pd.isna(child_part_cost_id):
             continue
@@ -175,11 +177,11 @@ def enrich_material_lines_from_child_costs(material_lines):
             child.get("ucpUnitRawCost")
         ) or 0
         material_lines.at[index, "ucmRawCost"] = raw_total
-        material_lines.at[index, "ucmCostSource"] = "manufactured_history"
-        material_lines.at[index, "ucmIsPurchased"] = False
-        material_lines.at[index, "ucmManufacturedPartCostIsCurrent"] = bool(
-            serialize_value(child.get("ucpIsCurrent"))
+        is_current = bool(serialize_value(child.get("ucpIsCurrent")))
+        material_lines.at[index, "ucmCostSource"] = (
+            "manufactured_current" if is_current else "manufactured_history"
         )
+        material_lines.at[index, "ucmIsPurchased"] = False
+        material_lines.at[index, "ucmManufacturedPartCostIsCurrent"] = is_current
 
     return material_lines
-

@@ -202,6 +202,9 @@
 }
 .focus-head h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .focus-actions, .source-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.source-strip { align-items: center; }
+.source-label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.source-reference { color: var(--ink); font-size: 13px; font-weight: 700; }
 .focus-layout { display: grid; gap: 12px; grid-template-columns: minmax(420px, 1fr) minmax(360px, .8fr); }
 .edit-panel, .calc-panel {
   background: var(--panel);
@@ -434,4 +437,3 @@ pre { background: #101828; border-radius: 8px; color: #e5edf8; font-size: 12px; 
 .settings-mini { display: grid; gap: 10px; }
 .settings-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .settings-actions span { color: var(--muted); font-size: 12px; font-weight: 850; }
-
