@@ -18,6 +18,23 @@ interactively, builds a versioned image once, validates both SQL databases and t
 costing schema, starts the containers, waits for database-aware readiness, verifies
 HTTPS, and exports the Caddy root certificate.
 
+After the initial installation, update the application from `origin/master` with:
+
+```bash
+sudo bash deployment/ubuntu/update.sh
+```
+
+For a reviewed rehearsal branch, pass its name explicitly:
+
+```bash
+sudo bash deployment/ubuntu/update.sh codex
+```
+
+The updater refuses a dirty checkout or a non-fast-forward branch, fetches Git as
+the account that invoked `sudo`, derives an immutable `git-<commit>` image version,
+then runs both the installer and verifier. Database settings and secrets are not
+changed.
+
 ## Security boundaries
 
 - Only TCP 443 is published by Compose. Port 8000 is never bound to the VM.
@@ -39,10 +56,11 @@ application cannot be reported healthy.
 
 ## Releases and rollback
 
-Set a unique `APP_VERSION` and matching `COST_APP_IMAGE` tag for every build. Once
-that image exists, the installer treats it as immutable and will not rebuild the
-same tag. A successful upgrade retains the previous image name in
-`deployment/runtime/previous-image`.
+`update.sh` generates a matching `APP_VERSION` and `COST_APP_IMAGE` from the first
+12 characters of the selected Git commit. Direct installer use must instead set a
+unique matching version and image tag in `.env`. Once an image exists, the
+installer treats it as immutable and will not rebuild the same tag. A successful
+upgrade retains the previous image name in `deployment/runtime/previous-image`.
 
 Rollback only the application containers with:
 

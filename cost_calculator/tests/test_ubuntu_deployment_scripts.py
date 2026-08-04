@@ -9,6 +9,9 @@ INSTALLER = (PROJECT_ROOT / "deployment" / "ubuntu" / "install.sh").read_text(
 VERIFIER = (PROJECT_ROOT / "deployment" / "ubuntu" / "verify.sh").read_text(
     encoding="utf-8"
 )
+UPDATER = (PROJECT_ROOT / "deployment" / "ubuntu" / "update.sh").read_text(
+    encoding="utf-8"
+)
 
 
 class UbuntuDeploymentScriptTests(unittest.TestCase):
@@ -44,6 +47,30 @@ class UbuntuDeploymentScriptTests(unittest.TestCase):
             deploy_body.index("create_initial_admin_if_needed"),
             deploy_body.index("python -m tools.deployment_preflight"),
         )
+
+    def test_updater_defaults_to_master_and_accepts_one_branch(self):
+        self.assertIn('branch="${1:-master}"', UPDATER)
+        self.assertIn('[[ "$#" -le 1 ]]', UPDATER)
+        self.assertIn('git check-ref-format --branch "$branch"', UPDATER)
+
+    def test_updater_uses_the_checkout_owner_and_requires_a_clean_fast_forward(self):
+        self.assertIn('git_user="${SUDO_USER:-}"', UPDATER)
+        self.assertIn('sudo -H -u "$git_user" -- git', UPDATER)
+        self.assertIn("status --porcelain --untracked-files=normal", UPDATER)
+        self.assertIn('merge --ff-only "refs/remotes/origin/$branch"', UPDATER)
+        self.assertIn('[[ "$commit_sha" == "$remote_sha" ]]', UPDATER)
+
+    def test_updater_generates_an_immutable_image_from_the_git_commit(self):
+        self.assertIn('short_sha="${commit_sha:0:12}"', UPDATER)
+        self.assertIn('app_version="git-$short_sha"', UPDATER)
+        self.assertIn('image_tag="cost-calculator:$app_version"', UPDATER)
+        self.assertIn('print "APP_VERSION=" app_version', UPDATER)
+        self.assertIn('print "COST_APP_IMAGE=" image_tag', UPDATER)
+
+    def test_updater_installs_and_verifies_the_selected_commit(self):
+        install_index = UPDATER.index('deployment/ubuntu/install.sh')
+        verify_index = UPDATER.index('deployment/ubuntu/verify.sh')
+        self.assertLess(install_index, verify_index)
 
 
 if __name__ == "__main__":

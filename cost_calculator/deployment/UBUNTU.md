@@ -243,6 +243,26 @@ inbound 443, document the failure, and reschedule after a complete rehearsal.
 
 ## Routine operations
 
+Deploy the latest reviewed commit from `origin/master` during a maintenance
+window:
+
+```bash
+cd /opt/cost-calculator/cost_calculator
+sudo bash deployment/ubuntu/update.sh
+```
+
+To update the rehearsal server from another reviewed branch, pass the branch name:
+
+```bash
+sudo bash deployment/ubuntu/update.sh codex
+```
+
+The checkout must be clean. The script fetches and fast-forwards the selected
+branch, generates `APP_VERSION` and `COST_APP_IMAGE` from its Git commit, installs
+the image, and runs the full verifier. It does not run database migrations. Review
+and execute any required migration separately before deploying code that depends
+on it.
+
 ```bash
 sudo docker compose ps
 sudo docker compose logs --tail=200 app proxy

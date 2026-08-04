@@ -123,6 +123,16 @@ For the container deployment, create the two mounted secret files described in
 sudo bash deployment/ubuntu/install.sh
 ```
 
+After the initial installation, deploy the latest reviewed `master` commit and
+run all verification checks with:
+
+```bash
+sudo bash deployment/ubuntu/update.sh
+```
+
+Pass a branch name, such as `codex`, only when intentionally updating a rehearsal
+server from that branch.
+
 Access the application through HTTPS on port 443. The production image contains the
 complete browser application and does not require internet access while running.
 Administrators can manage users and request an update through the UI; actual update
