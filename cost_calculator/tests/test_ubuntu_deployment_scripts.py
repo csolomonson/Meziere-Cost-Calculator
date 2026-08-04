@@ -60,6 +60,18 @@ class UbuntuDeploymentScriptTests(unittest.TestCase):
         self.assertIn('merge --ff-only "refs/remotes/origin/$branch"', UPDATER)
         self.assertIn('[[ "$commit_sha" == "$remote_sha" ]]', UPDATER)
 
+    def test_updater_validates_the_target_before_switching(self):
+        validation_index = UPDATER.index(
+            'cat-file -e "refs/remotes/origin/$branch:${project_prefix}${required_path}"'
+        )
+        switch_index = UPDATER.index('run_git switch "$branch"')
+        self.assertLess(validation_index, switch_index)
+        self.assertIn("deployment/ubuntu/update.sh", UPDATER)
+
+    def test_single_branch_clone_does_not_require_new_tracking_configuration(self):
+        self.assertIn('switch --no-track -c "$branch"', UPDATER)
+        self.assertNotIn('switch --track -c "$branch"', UPDATER)
+
     def test_updater_generates_an_immutable_image_from_the_git_commit(self):
         self.assertIn('short_sha="${commit_sha:0:12}"', UPDATER)
         self.assertIn('app_version="git-$short_sha"', UPDATER)

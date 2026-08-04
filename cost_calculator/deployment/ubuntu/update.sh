@@ -59,11 +59,27 @@ log "Fetching origin/$branch as $git_user"
 run_git fetch --prune origin "+refs/heads/$branch:refs/remotes/origin/$branch"
 run_git show-ref --verify --quiet "refs/remotes/origin/$branch" || fail "origin/$branch was not found."
 
+# Refuse an old or unrelated branch before changing the worktree. This is
+# especially important during a migration while master may not contain the
+# Ubuntu deployment yet.
+project_prefix="$(run_git rev-parse --show-prefix)"
+for required_path in \
+    compose.yaml \
+    deployment/ubuntu/install.sh \
+    deployment/ubuntu/update.sh \
+    deployment/ubuntu/verify.sh; do
+    run_git cat-file -e "refs/remotes/origin/$branch:${project_prefix}${required_path}" 2>/dev/null || \
+        fail "origin/$branch does not contain the current Ubuntu deployment. Has its deployment PR been merged?"
+done
+
 if run_git show-ref --verify --quiet "refs/heads/$branch"; then
     run_git switch "$branch"
     run_git merge --ff-only "refs/remotes/origin/$branch"
 else
-    run_git switch --track -c "$branch" "refs/remotes/origin/$branch"
+    # A --single-branch clone has no tracking refspec for other branches. Avoid
+    # --track here because Git can update the worktree before tracking setup
+    # fails, leaving a partially switched checkout.
+    run_git switch --no-track -c "$branch" "refs/remotes/origin/$branch"
 fi
 
 commit_sha="$(run_git rev-parse HEAD)"
