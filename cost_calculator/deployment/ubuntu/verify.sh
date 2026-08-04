@@ -12,7 +12,7 @@ fi
 
 docker compose config --quiet
 docker compose ps
-docker compose exec -T app python tools/deployment_preflight.py
+docker compose exec -T app python -m tools.deployment_preflight
 app_hostname="$(sed -n 's/^APP_HOSTNAME=//p' .env | tail -n 1 | tr -d '\r')"
 [[ "$app_hostname" =~ ^[A-Za-z0-9.-]+$ && "$app_hostname" != "localhost" ]]
 curl --fail --silent --show-error --insecure --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/health" >/dev/null

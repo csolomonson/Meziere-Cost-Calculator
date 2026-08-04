@@ -170,7 +170,9 @@ code changes after rehearsal, assign a new version and repeat the rehearsal.
   SQL permissions, and client trust deployment.
 - Confirm `sudo docker image inspect <image-tag>` and
   `sudo docker image inspect caddy:2.11.4-alpine` both succeed on the VM.
-- Confirm secret files exist and are mode 600. Do not copy them into the ticket.
+- Confirm `.env` is mode 600. Confirm both files under `secrets/` are mode 400
+  and owned by the UID/GID reported by the application image. Do not copy their
+  contents into the ticket.
 - Take a VM snapshot or confirm the VM backup restore point.
 - Put the previous image tag and rollback command in the change record.
 - Schedule the app owner, VM/network owner, SQL owner, and a business tester. The

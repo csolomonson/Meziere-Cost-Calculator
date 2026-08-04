@@ -195,19 +195,33 @@ create_initial_admin_if_needed() {
         local admin_username seed_json
         read -r -p "Administrator username: " admin_username
         [[ "$admin_username" =~ ^[A-Za-z0-9_.@-]{1,100}$ ]] || fail "The administrator username contains unsupported characters."
-        seed_json="$(docker compose run --rm --no-deps app python tools/create_user_seed.py "$admin_username")"
+        seed_json="$(docker compose run --rm --no-deps app python -m tools.create_user_seed "$admin_username")"
         [[ "$seed_json" == \{* ]] || fail "The administrator seed was not generated successfully."
         printf '%s\n' "$seed_json" > "$users_file"
-        chmod 0600 "$users_file"
+        chmod 0400 "$users_file"
     fi
+}
+
+grant_secret_access_to_app() {
+    local secrets_dir="$project_root/secrets"
+    local app_uid app_gid
+    app_uid="$(docker compose run --rm --no-deps --entrypoint id app -u | tr -d '\r\n')"
+    app_gid="$(docker compose run --rm --no-deps --entrypoint id app -g | tr -d '\r\n')"
+    [[ "$app_uid" =~ ^[0-9]+$ && "$app_gid" =~ ^[0-9]+$ ]] || fail "Could not determine the application container UID and GID."
+
+    # File-backed Compose secrets are bind mounts, so their host ownership is
+    # preserved inside the container. Grant only the non-root application user
+    # read access instead of making either secret world-readable.
+    chown "$app_uid:$app_gid" "$secrets_dir/db_password.txt" "$secrets_dir/app_users.json"
+    chmod 0400 "$secrets_dir/db_password.txt" "$secrets_dir/app_users.json"
 }
 
 remember_previous_image() {
     local container_id previous_image new_image
     container_id="$(docker compose ps -q app 2>/dev/null || true)"
-    [[ -n "$container_id" ]] || return
+    [[ -n "$container_id" ]] || return 0
     previous_image="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
-    new_image="$(docker compose config --images | sed -n '1p')"
+    new_image="$(env_value COST_APP_IMAGE)"
     if [[ -n "$previous_image" && "$previous_image" != "$new_image" ]]; then
         mkdir -p "$runtime_dir"
         printf '%s\n' "$previous_image" > "$runtime_dir/previous-image"
@@ -220,7 +234,7 @@ deploy() {
     cd "$project_root"
     docker compose config --quiet
 
-    desired_image="$(docker compose config --images | sed -n '1p')"
+    desired_image="$(env_value COST_APP_IMAGE)"
     current_container="$(docker compose ps -q app 2>/dev/null || true)"
     current_image=""
     if [[ -n "$current_container" ]]; then
@@ -232,10 +246,11 @@ deploy() {
         log "Building the versioned application image $desired_image"
         docker compose build --pull app
     fi
+    grant_secret_access_to_app
     create_initial_admin_if_needed
 
     log "Testing credentials, SQL connectivity, schema, and PDF runtime"
-    docker compose run --rm --no-deps app python tools/deployment_preflight.py
+    docker compose run --rm --no-deps app python -m tools.deployment_preflight
 
     remember_previous_image
     log "Starting the application and waiting for database-aware readiness"
