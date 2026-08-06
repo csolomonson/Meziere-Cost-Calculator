@@ -9,6 +9,7 @@ INSTALLER = (PROJECT_ROOT / "deployment" / "ubuntu" / "install.sh").read_text(
 VERIFIER = (PROJECT_ROOT / "deployment" / "ubuntu" / "verify.sh").read_text(
     encoding="utf-8"
 )
+COMPOSE = (PROJECT_ROOT / "compose.yaml").read_text(encoding="utf-8")
 UPDATER = (PROJECT_ROOT / "deployment" / "ubuntu" / "update.sh").read_text(
     encoding="utf-8"
 )
@@ -83,6 +84,27 @@ class UbuntuDeploymentScriptTests(unittest.TestCase):
         install_index = UPDATER.index('deployment/ubuntu/install.sh')
         verify_index = UPDATER.index('deployment/ubuntu/verify.sh')
         self.assertLess(install_index, verify_index)
+
+    def test_installer_offers_both_costing_storage_layouts(self):
+        self.assertIn("separate database or schema in ERP database", INSTALLER)
+        self.assertIn('storage_mode="database"', INSTALLER)
+        self.assertIn('storage_mode="erp_schema"', INSTALLER)
+        self.assertIn("COST_APP_STORAGE_MODE=%s", INSTALLER)
+        self.assertIn("COST_APP_SCHEMA=%s", INSTALLER)
+        self.assertIn("--configure-storage", INSTALLER)
+        self.assertIn("write_storage_settings", INSTALLER)
+
+    def test_installer_generates_a_dba_storage_setup_script(self):
+        self.assertIn("reset-selected-storage.sql", INSTALLER)
+        self.assertIn('print "IF DB_ID', INSTALLER)
+        self.assertIn('print "IF SCHEMA_ID', INSTALLER)
+        self.assertIn('print "IF DB_NAME() <>', INSTALLER)
+        self.assertIn('print "    SET NOEXEC ON;"', INSTALLER)
+        self.assertIn("GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA", INSTALLER)
+        self.assertIn("have a database administrator review and run", INSTALLER)
+
+    def test_compose_passes_the_selected_schema_to_the_application(self):
+        self.assertIn("COST_APP_SCHEMA: ${COST_APP_SCHEMA:-dbo}", COMPOSE)
 
 
 if __name__ == "__main__":

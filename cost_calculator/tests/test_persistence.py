@@ -69,6 +69,20 @@ class PersistenceTests(unittest.TestCase):
         )
         self.assertEqual(frame.loc[0, "ucoPartOperationLineID"], 10)
 
+    @patch("costing.persistence.inspect")
+    def test_table_metadata_uses_the_configured_schema(self, mock_inspect):
+        inspector = mock_inspect.return_value
+        inspector.get_columns.return_value = [{"name": "ucpPartID"}]
+
+        self.assertEqual(
+            persistence.get_table_columns(Mock(), "PartCosts"),
+            {"ucpPartID"},
+        )
+        inspector.get_columns.assert_called_once_with(
+            "PartCosts",
+            schema=persistence.APP_SCHEMA,
+        )
+
     def test_clean_row_converts_nan_to_none(self):
         row = persistence.clean_row({"value": float("nan"), "part": PART_ID})
 

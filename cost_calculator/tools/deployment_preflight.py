@@ -9,6 +9,7 @@ from pathlib import Path
 from reportlab import Version as reportlab_version
 from sqlalchemy import text
 
+from utils.app_storage import APP_SCHEMA, app_object_name
 from utils.erp_cursor import APP_DATABASE, ERP_DATABASE, app_cnxn, erp_cnxn
 
 
@@ -50,12 +51,13 @@ def check_costing_database() -> None:
             table_name
             for table_name in REQUIRED_TABLES
             if not connection.execute(
-                query, {"table_name": f"dbo.{table_name}"}
+                query, {"table_name": app_object_name(table_name)}
             ).scalar_one()
         ]
     if missing:
         raise RuntimeError(
-            "The costing database is missing required tables: " + ", ".join(missing)
+            f"The costing storage {APP_DATABASE}.{APP_SCHEMA} is missing required tables: "
+            + ", ".join(missing)
         )
 
 
@@ -63,7 +65,7 @@ def main() -> None:
     checks = (
         ("application user seed", check_user_seed),
         (f"ERP database {ERP_DATABASE}", check_erp_database),
-        (f"costing database {APP_DATABASE}", check_costing_database),
+        (f"costing storage {APP_DATABASE}.{APP_SCHEMA}", check_costing_database),
     )
     for label, check in checks:
         print(f"Checking {label} ...", flush=True)

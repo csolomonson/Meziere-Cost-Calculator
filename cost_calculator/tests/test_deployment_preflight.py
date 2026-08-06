@@ -54,6 +54,30 @@ class DeploymentPreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "MarkupBreaks"):
                 deployment_preflight.check_costing_database()
 
+    def test_costing_check_uses_configured_schema_object_names(self):
+        engine = MagicMock()
+        connection = engine.connect.return_value.__enter__.return_value
+        object_names = []
+
+        def execute(_query, parameters):
+            object_names.append(parameters["table_name"])
+            result = MagicMock()
+            result.scalar_one.return_value = 1
+            return result
+
+        connection.execute.side_effect = execute
+        with patch.object(deployment_preflight, "app_cnxn", engine), patch.object(
+            deployment_preflight,
+            "app_object_name",
+            side_effect=lambda table: f"CostCalculator.{table}",
+        ):
+            deployment_preflight.check_costing_database()
+
+        self.assertTrue(object_names)
+        self.assertTrue(
+            all(name.startswith("CostCalculator.") for name in object_names)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

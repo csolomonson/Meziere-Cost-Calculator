@@ -3,6 +3,7 @@ import json
 import pandas as pd
 from sqlalchemy import inspect, text
 
+from utils.app_storage import APP_SCHEMA, app_object_name, app_table
 from utils.erp_cursor import APP_DATABASE, app_cnxn
 
 
@@ -10,6 +11,11 @@ IDENTITY_COLUMNS = {
     "PartCosts": {"ucpPartCostID"},
     "MaterialCostLines": {"ucmPartMaterialLineID"},
 }
+
+PART_COSTS = app_table("PartCosts")
+MARKUP_BREAKS = app_table("MarkupBreaks")
+COSTING_GLOBAL_DEFAULTS = app_table("CostingGlobalDefaults")
+MACHINE_COST_DEFAULTS = app_table("MachineCostDefaults")
 
 
 def save_costing_run(costing_run, make_current=False):
@@ -55,9 +61,9 @@ def set_current_part_cost(connection, part_cost_id):
         )
 
     part_cost = connection.execute(
-        text("""
+        text(f"""
         SELECT ucpPartID, ucpPartRevision
-        FROM PartCosts
+        FROM {PART_COSTS}
         WHERE ucpPartCostID = :part_cost_id
         """),
         {"part_cost_id": part_cost_id},
@@ -66,8 +72,8 @@ def set_current_part_cost(connection, part_cost_id):
         raise ValueError(f"Part cost {part_cost_id} was not found.")
 
     connection.execute(
-        text("""
-        UPDATE PartCosts
+        text(f"""
+        UPDATE {PART_COSTS}
         SET ucpIsCurrent = 0
         WHERE ucpPartID = :part_id
             AND ucpPartRevision = :revision_id
@@ -78,8 +84,8 @@ def set_current_part_cost(connection, part_cost_id):
         },
     )
     connection.execute(
-        text("""
-        UPDATE PartCosts
+        text(f"""
+        UPDATE {PART_COSTS}
         SET ucpIsCurrent = 1
         WHERE ucpPartCostID = :part_cost_id
         """),
@@ -128,16 +134,16 @@ def save_markup_breaks(connection, part_id, revision_id, markup_breaks):
     scoped_revision_id = revision_id or ""
     if scoped_part_id:
         connection.execute(
-            text("DELETE FROM MarkupBreaks WHERE umbPartID = :part_id AND umbPartRevision = :revision_id"),
+            text(f"DELETE FROM {MARKUP_BREAKS} WHERE umbPartID = :part_id AND umbPartRevision = :revision_id"),
             {"part_id": scoped_part_id, "revision_id": scoped_revision_id},
         )
     else:
-        connection.execute(text("DELETE FROM MarkupBreaks WHERE umbPartID IS NULL"))
+        connection.execute(text(f"DELETE FROM {MARKUP_BREAKS} WHERE umbPartID IS NULL"))
 
     for row in markup_breaks:
         connection.execute(
-            text("""
-            INSERT INTO MarkupBreaks (
+            text(f"""
+            INSERT INTO {MARKUP_BREAKS} (
                 umbPartID,
                 umbPartRevision,
                 umbMinimumQuantity,
@@ -172,12 +178,12 @@ def save_markup_breaks(connection, part_id, revision_id, markup_breaks):
 
 
 def save_global_defaults(connection, defaults, shift_settings):
-    if not connection.execute(text("SELECT TOP 1 1 FROM CostingGlobalDefaults")).first():
-        connection.execute(text("INSERT INTO CostingGlobalDefaults DEFAULT VALUES"))
+    if not connection.execute(text(f"SELECT TOP 1 1 FROM {COSTING_GLOBAL_DEFAULTS}")).first():
+        connection.execute(text(f"INSERT INTO {COSTING_GLOBAL_DEFAULTS} DEFAULT VALUES"))
 
     connection.execute(
-        text("""
-        UPDATE CostingGlobalDefaults
+        text(f"""
+        UPDATE {COSTING_GLOBAL_DEFAULTS}
         SET
             ucgDefaultLaborHourlyCost = :labor,
             ucgDefaultMachineRunningHourlyCost = :running,
@@ -189,7 +195,7 @@ def save_global_defaults(connection, defaults, shift_settings):
             ucgDefaultAfterHoursIdleRateMultiplier = :after_hours_multiplier,
             ucgUpdatedDate = SYSUTCDATETIME()
         WHERE ucgGlobalDefaultID = (
-            SELECT TOP 1 ucgGlobalDefaultID FROM CostingGlobalDefaults ORDER BY ucgGlobalDefaultID
+            SELECT TOP 1 ucgGlobalDefaultID FROM {COSTING_GLOBAL_DEFAULTS} ORDER BY ucgGlobalDefaultID
         )
         """),
         {
@@ -208,8 +214,8 @@ def save_global_defaults(connection, defaults, shift_settings):
 def save_machine_defaults(connection, machine_defaults):
     for machine, defaults in machine_defaults.items():
         connection.execute(
-            text("""
-            MERGE MachineCostDefaults AS target
+            text(f"""
+            MERGE {MACHINE_COST_DEFAULTS} AS target
             USING (SELECT :machine AS ucmWorkCenterID) AS source
                 ON target.ucmWorkCenterID = source.ucmWorkCenterID
             WHEN MATCHED THEN UPDATE SET
@@ -263,7 +269,7 @@ def insert_part_cost(connection, part_cost_df):
     column_sql = ", ".join(columns)
     value_sql = ", ".join(f":{column}" for column in columns)
     query = text(
-        f"INSERT INTO PartCosts ({column_sql}) "
+        f"INSERT INTO {PART_COSTS} ({column_sql}) "
         f"OUTPUT INSERTED.ucpPartCostID "
         f"VALUES ({value_sql})"
     )
@@ -294,7 +300,13 @@ def insert_lines(connection, table_name, lines_df):
 
     frame = apply_line_defaults(table_name, frame)
     frame = clean_frame(frame)
-    frame.to_sql(table_name, connection, if_exists="append", index=False)
+    frame.to_sql(
+        table_name,
+        connection,
+        schema=APP_SCHEMA,
+        if_exists="append",
+        index=False,
+    )
 
 
 def assert_supported_line_table_shape(connection, table_name):
@@ -304,7 +316,7 @@ def assert_supported_line_table_shape(connection, table_name):
     if table_column_is_identity(connection, table_name, "ucoPartOperationLineID"):
         raise RuntimeError(
             "OperationCostLines.ucoPartOperationLineID is still an identity column. "
-            "Run database/migrations/001_migrate_operation_sequence_identity.sql against M2_ME once so operation "
+            f"Run database/migrations/001_migrate_operation_sequence_identity.sql against {APP_DATABASE}.{APP_SCHEMA} once so operation "
             "sequence IDs can be saved as 10, 20, 30 per part cost."
         )
 
@@ -347,7 +359,10 @@ def clean_value(value):
 
 def get_table_columns(connection, table_name):
     inspector = inspect(connection)
-    return {column["name"] for column in inspector.get_columns(table_name)}
+    return {
+        column["name"]
+        for column in inspector.get_columns(table_name, schema=APP_SCHEMA)
+    }
 
 
 def table_has_column(connection, table_name, column_name):
@@ -359,5 +374,5 @@ def table_column_is_identity(connection, table_name, column_name):
         text("""
         SELECT COLUMNPROPERTY(OBJECT_ID(:table_name), :column_name, 'IsIdentity')
         """),
-        {"table_name": f"dbo.{table_name}", "column_name": column_name},
+        {"table_name": app_object_name(table_name), "column_name": column_name},
     ).scalar() or 0)

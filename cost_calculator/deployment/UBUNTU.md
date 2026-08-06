@@ -104,6 +104,8 @@ Record these values in the change ticket:
 - VM hostname, static IP, and application DNS name;
 - SQL Server DNS name and fixed TCP port;
 - ERP and costing database names;
+- whether costing storage uses a dedicated database or a dedicated schema inside
+  the ERP database, including the schema name;
 - runtime SQL login name;
 - whether the SQL certificate chains to a public/system CA or an internal CA;
 - initial application administrator username;
@@ -118,18 +120,22 @@ Do not put either password in the ticket or `.env`.
    backups/snapshots, monitoring, and the upstream firewall.
 2. Configure SQL Server with a fixed TCP port and allow the VM's IP. Confirm the
    SQL certificate name matches the DNS name used by the application.
-3. Because the current costing data is disposable, use a database administration
-   account to run `database/reset_schema.sql` once against the intended costing
-   database. The script is destructive and currently contains `USE [M2_ME]`; if a
-   different database name is selected, have the database owner review that line
-   before execution. Never grant this schema privilege to the runtime login.
-4. Grant the runtime login read access to the ERP database and read/write access
-   to the newly created costing tables.
-5. Copy a reviewed release directory to `/opt/cost-calculator`. Keep it owned by
+3. Copy a reviewed release directory to `/opt/cost-calculator`. Keep it owned by
    root or a dedicated deployment account and do not share-write it with the app.
-6. If SQL Server uses an internal CA, copy only the public root/intermediate PEM
+4. If SQL Server uses an internal CA, copy only the public root/intermediate PEM
    certificates to `deployment/sql-ca/*.crt`. Never copy a private key.
-7. From the release directory, run:
+5. Run the installer far enough to select the costing storage layout and generate
+   `deployment/runtime/reset-selected-storage.sql`. A missing-table preflight
+   failure is expected until the next step.
+6. Because the current costing data is disposable, have the database owner review
+   and run that generated script once. For dedicated-database mode it creates the
+   selected database when missing. For ERP-schema mode it creates only the app
+   schema and tables inside the existing ERP database. The script is destructive
+   only within the selected app schema. Never grant schema creation to the runtime
+   login.
+7. Grant the runtime login read access only to the ERP objects the application
+   needs. The generated script grants read/write access to the app schema.
+8. From the release directory, rerun:
 
    ```bash
    sudo bash deployment/ubuntu/install.sh
@@ -137,10 +143,10 @@ Do not put either password in the ticket or `.env`.
 
    On the first run, the installer prompts for missing non-secret values, the SQL
    password, and an initial application administrator. Password input is hidden.
-8. Import `deployment/runtime/caddy-root.crt` into the managed trust store for all
+9. Import `deployment/runtime/caddy-root.crt` into the managed trust store for all
    client machines, preferably through Group Policy or the organization's endpoint
    management system. Do not send it as an arbitrary end-user download.
-9. Run `sudo bash deployment/ubuntu/verify.sh`.
+10. Run `sudo bash deployment/ubuntu/verify.sh`.
 
 ## Rehearsal - complete by August 12
 

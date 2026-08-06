@@ -2,12 +2,23 @@
 
 import pandas as pd
 
+from utils.app_storage import app_object_name, app_table
+
+
+PART_COSTS = app_table("PartCosts")
+OPERATION_COST_LINES = app_table("OperationCostLines")
+MATERIAL_COST_LINES = app_table("MaterialCostLines")
+COSTING_GLOBAL_DEFAULTS = app_table("CostingGlobalDefaults")
+MACHINE_COST_DEFAULTS = app_table("MachineCostDefaults")
+MARKUP_BREAKS = app_table("MarkupBreaks")
+DEFAULT_COSTS = app_table("DefaultCosts")
+
 
 def get_default_costs(*, run_app_query, table_exists):
     if table_exists("CostingGlobalDefaults") and table_exists(
         "MachineCostDefaults"
     ):
-        global_defaults = run_app_query("""
+        global_defaults = run_app_query(f"""
         SELECT TOP 1
             N'__GLOBAL__' AS ucdWorkCenterID,
             CAST(1 AS DECIMAL(19,6)) AS ucdMinimumQuantity,
@@ -21,10 +32,10 @@ def get_default_costs(*, run_app_query, table_exists):
             CAST(NULL AS DECIMAL(9,4)) AS ucdDefaultMachineCostMarkup,
             CAST(NULL AS DECIMAL(9,4)) AS ucdDefaultExternalOperationMarkup,
             CAST(NULL AS DECIMAL(9,4)) AS ucdDefaultAdditionalCostMarkup
-        FROM CostingGlobalDefaults
+        FROM {COSTING_GLOBAL_DEFAULTS}
         ORDER BY ucgGlobalDefaultID
         """)
-        machine_defaults = run_app_query("""
+        machine_defaults = run_app_query(f"""
         SELECT
             ucmWorkCenterID AS ucdWorkCenterID,
             CAST(1 AS DECIMAL(19,6)) AS ucdMinimumQuantity,
@@ -38,19 +49,19 @@ def get_default_costs(*, run_app_query, table_exists):
             CAST(NULL AS DECIMAL(9,4)) AS ucdDefaultMachineCostMarkup,
             CAST(NULL AS DECIMAL(9,4)) AS ucdDefaultExternalOperationMarkup,
             CAST(NULL AS DECIMAL(9,4)) AS ucdDefaultAdditionalCostMarkup
-        FROM MachineCostDefaults
+        FROM {MACHINE_COST_DEFAULTS}
         """)
         return pd.concat([global_defaults, machine_defaults], ignore_index=True)
 
-    return run_app_query("SELECT * FROM DefaultCosts")
+    return run_app_query(f"SELECT * FROM {DEFAULT_COSTS}")
 
 
 def app_table_exists(table_name, *, run_app_query):
-    query = f"""
-    SELECT CASE WHEN OBJECT_ID(N'dbo.{table_name}', N'U') IS NULL THEN 0 ELSE 1 END AS table_exists
+    query = """
+    SELECT CASE WHEN OBJECT_ID(:param1, N'U') IS NULL THEN 0 ELSE 1 END AS table_exists
     """
     try:
-        rows = run_app_query(query)
+        rows = run_app_query(query, (app_object_name(table_name),))
     except Exception:
         return False
     return not rows.empty and bool(rows.iloc[0]["table_exists"])
@@ -64,7 +75,7 @@ def app_column_exists(table_name, column_name, *, run_app_query):
     END AS column_exists
     """
     try:
-        rows = run_app_query(query, (f"dbo.{table_name}", column_name))
+        rows = run_app_query(query, (app_object_name(table_name), column_name))
     except Exception:
         return False
     return not rows.empty and bool(rows.iloc[0]["column_exists"])
@@ -82,7 +93,7 @@ def get_markup_break_rows(
 
     if part_id:
         return run_app_query(
-            """
+            f"""
         SELECT
             umbMinimumQuantity AS breakQty,
             umbMaterialMarkup AS material,
@@ -90,7 +101,7 @@ def get_markup_break_rows(
             umbMachineCostMarkup AS machine,
             umbExternalOperationMarkup AS [external],
             umbAdditionalCostMarkup AS additional
-        FROM MarkupBreaks
+        FROM {MARKUP_BREAKS}
         WHERE umbPartID = :param1
             AND umbPartRevision = :param2
         ORDER BY umbMinimumQuantity
@@ -98,7 +109,7 @@ def get_markup_break_rows(
             (part_id, revision_id or ""),
         )
 
-    return run_app_query("""
+    return run_app_query(f"""
     SELECT
         umbMinimumQuantity AS breakQty,
         umbMaterialMarkup AS material,
@@ -106,7 +117,7 @@ def get_markup_break_rows(
         umbMachineCostMarkup AS machine,
         umbExternalOperationMarkup AS [external],
         umbAdditionalCostMarkup AS additional
-    FROM MarkupBreaks
+    FROM {MARKUP_BREAKS}
     WHERE umbPartID IS NULL
     ORDER BY umbMinimumQuantity
     """)
@@ -129,7 +140,7 @@ def get_markup_breaks(
 def get_global_cost_defaults(*, run_app_query, table_exists):
     if table_exists("CostingGlobalDefaults"):
         return run_app_query(
-            "SELECT TOP 1 * FROM CostingGlobalDefaults ORDER BY ucgGlobalDefaultID"
+            f"SELECT TOP 1 * FROM {COSTING_GLOBAL_DEFAULTS} ORDER BY ucgGlobalDefaultID"
         )
     return pd.DataFrame()
 
@@ -137,13 +148,13 @@ def get_global_cost_defaults(*, run_app_query, table_exists):
 def get_machine_cost_defaults(*, run_app_query, table_exists):
     if table_exists("MachineCostDefaults"):
         return run_app_query(
-            "SELECT * FROM MachineCostDefaults ORDER BY ucmWorkCenterID"
+            f"SELECT * FROM {MACHINE_COST_DEFAULTS} ORDER BY ucmWorkCenterID"
         )
     return pd.DataFrame()
 
 
 def get_last_part_cost(part_id, revision_id="", *, run_app_query):
-    query = """
+    query = f"""
     SELECT TOP 1
         ucpPartCostID,
         ucpPartID,
@@ -166,7 +177,7 @@ def get_last_part_cost(part_id, revision_id="", *, run_app_query):
         ucpTotalRawCost,
         ucpTotalMarkedUpCost,
         CAST(0 AS BIT) AS ucpIsCurrent
-    FROM PartCosts
+    FROM {PART_COSTS}
     WHERE ucpPartID = :param1
         AND ucpPartRevision = :param2
     ORDER BY
@@ -182,7 +193,7 @@ def get_current_part_cost(
     if not has_current_column():
         return pd.DataFrame()
 
-    query = """
+    query = f"""
     SELECT TOP 1
         ucpPartCostID,
         ucpPartID,
@@ -205,7 +216,7 @@ def get_current_part_cost(
         ucpTotalRawCost,
         ucpTotalMarkedUpCost,
         ucpIsCurrent
-    FROM PartCosts
+    FROM {PART_COSTS}
     WHERE ucpPartID = :param1
         AND ucpPartRevision = :param2
         AND ucpIsCurrent = 1
@@ -250,14 +261,18 @@ def get_part_cost_history(
         ucpTotalMarkedUpCost,
         {current_select},
         ucpNotes
-    FROM PartCosts
+    FROM {part_costs}
     WHERE ucpPartID = :param1
         AND ucpPartRevision = :param2
     ORDER BY
         {current_order}
         ucpDateCosted DESC,
         ucpPartCostID DESC
-    """.format(current_select=current_select, current_order=current_order)
+    """.format(
+        current_select=current_select,
+        current_order=current_order,
+        part_costs=PART_COSTS,
+    )
     return run_app_query(query, (part_id, revision_id))
 
 
@@ -331,7 +346,7 @@ def get_recent_part_costs(
         ucpTotalRawCost,
         ucpTotalMarkedUpCost,
         {current_select}
-    FROM PartCosts
+    FROM {PART_COSTS}
     {where_clause}
     ORDER BY
         ucpDateCosted {order_direction},
@@ -342,20 +357,20 @@ def get_recent_part_costs(
 
 def get_part_cost(part_cost_id, *, run_app_query):
     return run_app_query(
-        "SELECT * FROM PartCosts WHERE ucpPartCostID = :param1", (part_cost_id,)
+        f"SELECT * FROM {PART_COSTS} WHERE ucpPartCostID = :param1",
+        (part_cost_id,),
     )
 
 
 def get_saved_operation_lines(part_cost_id, *, run_app_query):
     return run_app_query(
-        "SELECT * FROM OperationCostLines WHERE ucoPartCostID = :param1 ORDER BY ucoPartOperationLineID",
+        f"SELECT * FROM {OPERATION_COST_LINES} WHERE ucoPartCostID = :param1 ORDER BY ucoPartOperationLineID",
         (part_cost_id,),
     )
 
 
 def get_saved_material_lines(part_cost_id, *, run_app_query):
     return run_app_query(
-        "SELECT * FROM MaterialCostLines WHERE ucmPartCostID = :param1 ORDER BY ucmPartMaterialLineID",
+        f"SELECT * FROM {MATERIAL_COST_LINES} WHERE ucmPartCostID = :param1 ORDER BY ucmPartMaterialLineID",
         (part_cost_id,),
     )
-

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd -- "$script_dir/../.." && pwd)"
 runtime_dir="$project_root/deployment/runtime"
+configure_storage_requested=false
 
 log() {
     printf '\n==> %s\n' "$*"
@@ -12,6 +13,27 @@ log() {
 fail() {
     printf '\nERROR: %s\n' "$*" >&2
     exit 1
+}
+
+usage() {
+    printf 'Usage: sudo bash deployment/ubuntu/install.sh [--configure-storage]\n'
+    printf 'Use --configure-storage to replace the existing database/schema selection.\n'
+}
+
+parse_args() {
+    [[ "$#" -le 1 ]] || {
+        usage >&2
+        exit 2
+    }
+    case "${1:-}" in
+        "") ;;
+        --configure-storage) configure_storage_requested=true ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *) fail "Unknown installer option: $1" ;;
+    esac
 }
 
 on_error() {
@@ -92,11 +114,16 @@ read_setting() {
 
 configure_environment() {
     local env_file="$project_root/.env"
-    [[ -f "$env_file" ]] && return
+    if [[ -f "$env_file" ]]; then
+        if [[ "$configure_storage_requested" == "true" ]]; then
+            reconfigure_storage
+        fi
+        return
+    fi
     [[ -t 0 ]] || fail ".env is missing and input is not interactive. Create it from .env.example before deployment."
 
     log "Creating the non-secret deployment configuration"
-    local app_hostname db_server db_username erp_database app_database app_version trust_certificate image_tag
+    local app_hostname db_server db_username erp_database app_database app_schema storage_choice storage_mode app_version trust_certificate image_tag
     app_hostname="$(read_setting "Application DNS hostname" "$(hostname -f 2>/dev/null || hostname)")"
     [[ "$app_hostname" =~ ^[A-Za-z0-9.-]+$ && "$app_hostname" != .* && "$app_hostname" != *. ]] || fail "Enter a DNS hostname without a scheme, port, or path."
     db_server="$(read_setting "SQL Server host and fixed TCP port" "sqlserver.example.internal,1433")"
@@ -104,7 +131,20 @@ configure_environment() {
     [[ "$db_server" != *\\* ]] || fail "Named SQL Server instances are not supported. Use host,port."
     db_username="$(read_setting "SQL login" "cost_app_access")"
     erp_database="$(read_setting "ERP database" "M1_ME")"
-    app_database="$(read_setting "Costing database" "M2_ME")"
+    storage_choice="$(read_setting "Costing storage: separate database or schema in ERP database (database/schema)" "database")"
+    case "${storage_choice,,}" in
+        database|d|1)
+            storage_mode="database"
+            app_database="$(read_setting "Dedicated costing database" "M2_ME")"
+            app_schema="dbo"
+            ;;
+        schema|s|2|erp_schema)
+            storage_mode="erp_schema"
+            app_database="$erp_database"
+            app_schema="$(read_setting "Costing schema within $erp_database" "CostCalculator")"
+            ;;
+        *) fail "Choose 'database' or 'schema' for costing storage." ;;
+    esac
     app_version="$(read_setting "Application version" "2026.08.17")"
     read -r -p "Temporarily bypass SQL Server certificate validation? [y/N]: " trust_certificate
     if [[ "$trust_certificate" =~ ^[Yy]$ ]]; then
@@ -115,7 +155,7 @@ configure_environment() {
     fi
     image_tag="cost-calculator:${app_version//[^A-Za-z0-9_.-]/-}"
 
-    for value in "$app_hostname" "$db_server" "$db_username" "$erp_database" "$app_database" "$app_version" "$image_tag"; do
+    for value in "$app_hostname" "$db_server" "$db_username" "$erp_database" "$storage_mode" "$app_database" "$app_schema" "$app_version" "$image_tag"; do
         [[ "$value" != *$'\n'* && "$value" != *$'\r'* && "$value" != *'#'* ]] || fail "Configuration values cannot contain line breaks or #."
     done
 
@@ -126,7 +166,9 @@ configure_environment() {
         printf 'COST_DB_USERNAME=%s\n' "$db_username"
         printf 'COST_DB_DRIVER=ODBC Driver 18 for SQL Server\n'
         printf 'COST_ERP_DATABASE=%s\n' "$erp_database"
+        printf 'COST_APP_STORAGE_MODE=%s\n' "$storage_mode"
         printf 'COST_APP_DATABASE=%s\n' "$app_database"
+        printf 'COST_APP_SCHEMA=%s\n' "$app_schema"
         printf 'COST_DB_TRUST_SERVER_CERTIFICATE=%s\n' "$trust_certificate"
         printf 'COST_DB_CONNECTION_TIMEOUT_SECONDS=5\n'
         printf 'COST_APP_IMAGE=%s\n' "$image_tag"
@@ -136,26 +178,186 @@ configure_environment() {
     chmod 0600 "$env_file"
 }
 
+write_storage_settings() {
+    local storage_mode="$1"
+    local app_database="$2"
+    local app_schema="$3"
+    local env_file="$project_root/.env"
+    local temporary_env
+    temporary_env="$(mktemp "$project_root/.env.storage.XXXXXX")"
+    awk \
+        -v storage_mode="$storage_mode" \
+        -v app_database="$app_database" \
+        -v app_schema="$app_schema" '
+        /^COST_APP_STORAGE_MODE=/ {
+            if (!mode_written) print "COST_APP_STORAGE_MODE=" storage_mode
+            mode_written = 1
+            next
+        }
+        /^COST_APP_DATABASE=/ {
+            if (!database_written) print "COST_APP_DATABASE=" app_database
+            database_written = 1
+            next
+        }
+        /^COST_APP_SCHEMA=/ {
+            if (!schema_written) print "COST_APP_SCHEMA=" app_schema
+            schema_written = 1
+            next
+        }
+        { print }
+        END {
+            if (!mode_written) print "COST_APP_STORAGE_MODE=" storage_mode
+            if (!database_written) print "COST_APP_DATABASE=" app_database
+            if (!schema_written) print "COST_APP_SCHEMA=" app_schema
+        }
+    ' "$env_file" > "$temporary_env"
+    chown --reference="$env_file" "$temporary_env"
+    chmod --reference="$env_file" "$temporary_env"
+    mv -f -- "$temporary_env" "$env_file"
+}
+
+reconfigure_storage() {
+    [[ -t 0 ]] || fail "--configure-storage requires interactive input."
+    local erp_database current_app_database storage_choice storage_mode app_database app_schema database_default
+    erp_database="$(env_value COST_ERP_DATABASE)"
+    current_app_database="$(env_value COST_APP_DATABASE)"
+    database_default="$current_app_database"
+    [[ -n "$database_default" && "$database_default" != "$erp_database" ]] || database_default="M2_ME"
+
+    log "Selecting new costing storage; existing data is not migrated"
+    storage_choice="$(read_setting "Costing storage: separate database or schema in ERP database (database/schema)" "database")"
+    case "${storage_choice,,}" in
+        database|d|1)
+            storage_mode="database"
+            app_database="$(read_setting "Dedicated costing database" "$database_default")"
+            app_schema="dbo"
+            ;;
+        schema|s|2|erp_schema)
+            storage_mode="erp_schema"
+            app_database="$erp_database"
+            app_schema="$(read_setting "Costing schema within $erp_database" "CostCalculator")"
+            ;;
+        *) fail "Choose 'database' or 'schema' for costing storage." ;;
+    esac
+    write_storage_settings "$storage_mode" "$app_database" "$app_schema"
+}
+
+ensure_storage_settings() {
+    local env_file="$project_root/.env"
+    local app_database erp_database app_schema storage_mode
+    app_database="$(env_value COST_APP_DATABASE)"
+    erp_database="$(env_value COST_ERP_DATABASE)"
+    app_schema="$(env_value COST_APP_SCHEMA)"
+    if [[ -z "$app_schema" ]]; then
+        app_schema="dbo"
+        printf 'COST_APP_SCHEMA=%s\n' "$app_schema" >> "$env_file"
+    fi
+    storage_mode="$(env_value COST_APP_STORAGE_MODE)"
+    if [[ -z "$storage_mode" ]]; then
+        if [[ "$app_database" == "$erp_database" && "$app_schema" != "dbo" ]]; then
+            storage_mode="erp_schema"
+        else
+            storage_mode="database"
+        fi
+        printf 'COST_APP_STORAGE_MODE=%s\n' "$storage_mode" >> "$env_file"
+    fi
+    chmod 0600 "$env_file"
+}
+
 env_value() {
     local key="$1"
     sed -n "s/^${key}=//p" "$project_root/.env" | tail -n 1 | tr -d '\r'
 }
 
 validate_environment() {
-    local app_hostname db_server app_version image_tag
+    local app_hostname db_server db_username erp_database storage_mode app_database app_schema app_version image_tag
     app_hostname="$(env_value APP_HOSTNAME)"
     db_server="$(env_value COST_DB_SERVER)"
+    db_username="$(env_value COST_DB_USERNAME)"
+    erp_database="$(env_value COST_ERP_DATABASE)"
+    storage_mode="$(env_value COST_APP_STORAGE_MODE)"
+    app_database="$(env_value COST_APP_DATABASE)"
+    app_schema="$(env_value COST_APP_SCHEMA)"
     app_version="$(env_value APP_VERSION)"
     image_tag="$(env_value COST_APP_IMAGE)"
 
     [[ "$app_hostname" =~ ^[A-Za-z0-9.-]+$ && "$app_hostname" != "localhost" ]] || fail ".env must set APP_HOSTNAME to the production DNS hostname."
     [[ "$db_server" =~ ,[0-9]+$ && "$db_server" != *\\* ]] || fail ".env must set COST_DB_SERVER in host,port form."
+    for identifier in "$db_username" "$erp_database" "$app_database" "$app_schema"; do
+        [[ "$identifier" =~ ^[A-Za-z_][A-Za-z0-9_@\$-]{0,127}$ ]] || fail "Database, schema, and SQL login names must use supported SQL identifier characters."
+    done
+    case "$storage_mode" in
+        database)
+            [[ "$app_database" != "$erp_database" ]] || fail "Database storage mode requires a dedicated COST_APP_DATABASE different from COST_ERP_DATABASE."
+            ;;
+        erp_schema)
+            [[ "$app_database" == "$erp_database" ]] || fail "ERP-schema storage mode requires COST_APP_DATABASE to match COST_ERP_DATABASE."
+            [[ "$app_schema" != "dbo" ]] || fail "ERP-schema storage mode requires a dedicated schema instead of dbo."
+            ;;
+        *) fail ".env must set COST_APP_STORAGE_MODE to database or erp_schema." ;;
+    esac
     [[ -n "$app_version" && "$app_version" != "development" ]] || fail ".env must set a release APP_VERSION."
     [[ "$image_tag" == cost-calculator:* && "$image_tag" != "cost-calculator:local" ]] || fail ".env must set a versioned COST_APP_IMAGE tag."
     if [[ "$(env_value COST_DB_TRUST_SERVER_CERTIFICATE)" == "true" ]]; then
         printf 'WARNING: SQL Server certificate identity validation is disabled in .env.\n' >&2
     fi
     chmod 0600 "$project_root/.env"
+}
+
+render_database_setup() {
+    local source_sql="$project_root/database/reset_schema.sql"
+    local output_sql="$runtime_dir/reset-selected-storage.sql"
+    local storage_mode app_database app_schema db_username
+    storage_mode="$(env_value COST_APP_STORAGE_MODE)"
+    app_database="$(env_value COST_APP_DATABASE)"
+    app_schema="$(env_value COST_APP_SCHEMA)"
+    db_username="$(env_value COST_DB_USERNAME)"
+
+    awk \
+        -v storage_mode="$storage_mode" \
+        -v app_database="$app_database" \
+        -v app_schema="$app_schema" \
+        -v db_username="$db_username" '
+        BEGIN { schema_setup_written = 0 }
+        /^USE \[M2_ME\];$/ {
+            if (storage_mode == "database") {
+                print "USE [master];"
+                print "GO"
+                print "IF DB_ID(N\047" app_database "\047) IS NULL"
+                print "    EXEC(N\047CREATE DATABASE [" app_database "]\047);"
+                print "GO"
+            }
+            print "USE [" app_database "];"
+            next
+        }
+        /^SET ANSI_NULLS ON;$/ && !schema_setup_written {
+            print "IF DB_NAME() <> N\047" app_database "\047"
+            print "BEGIN"
+            print "    RAISERROR(N\047Refusing to configure costing storage in the wrong database.\047, 16, 1);"
+            print "    SET NOEXEC ON;"
+            print "END;"
+            print "GO"
+            print "IF SCHEMA_ID(N\047" app_schema "\047) IS NULL"
+            print "    EXEC(N\047CREATE SCHEMA [" app_schema "] AUTHORIZATION [dbo]\047);"
+            print "GO"
+            schema_setup_written = 1
+        }
+        {
+            gsub(/dbo\./, "[" app_schema "].")
+            print
+        }
+        END {
+            print ""
+            print "IF DATABASE_PRINCIPAL_ID(N\047" db_username "\047) IS NULL"
+            print "    EXEC(N\047CREATE USER [" db_username "] FOR LOGIN [" db_username "]\047);"
+            print "GO"
+            print "GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::[" app_schema "] TO [" db_username "];"
+            print "GO"
+        }
+    ' "$source_sql" > "$output_sql"
+    chmod 0644 "$output_sql"
+    log "Prepared the destructive database setup script for $app_database.$app_schema"
+    printf 'For new or disposable storage only, have a database administrator review and run: %s\n' "$output_sql"
 }
 
 create_secrets() {
@@ -264,13 +466,16 @@ deploy() {
 }
 
 main() {
+    parse_args "$@"
     require_root
     require_ubuntu
     cd "$project_root"
     mkdir -p "$runtime_dir"
     install_docker
     configure_environment
+    ensure_storage_settings
     validate_environment
+    render_database_setup
     create_secrets
     deploy
 
@@ -278,6 +483,7 @@ main() {
     docker compose ps
     printf '\nApplication URL: https://%s/\n' "$(env_value APP_HOSTNAME)"
     printf 'Client trust certificate: %s\n' "$runtime_dir/caddy-root.crt"
+    printf 'Destructive database setup reference (do not rerun against retained data): %s\n' "$runtime_dir/reset-selected-storage.sql"
     printf 'Verification command: sudo bash deployment/ubuntu/verify.sh\n'
     printf 'Rollback command: sudo bash deployment/ubuntu/rollback.sh\n'
 }

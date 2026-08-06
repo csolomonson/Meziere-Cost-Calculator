@@ -123,6 +123,16 @@ For the container deployment, create the two mounted secret files described in
 sudo bash deployment/ubuntu/install.sh
 ```
 
+On a new installation, the script offers either a dedicated costing database or a
+dedicated costing schema inside the ERP database. It generates the destructive,
+deployment-specific DBA script at
+`deployment/runtime/reset-selected-storage.sql`; have a database administrator
+review and run it, then rerun the installer. The runtime application never
+receives database- or schema-creation privileges.
+
+Use `sudo bash deployment/ubuntu/install.sh --configure-storage` to change the
+selection on an existing disposable rehearsal deployment.
+
 After the initial installation, deploy the latest reviewed `master` commit and
 run all verification checks with:
 

@@ -18,6 +18,34 @@ interactively, builds a versioned image once, validates both SQL databases and t
 costing schema, starts the containers, waits for database-aware readiness, verifies
 HTTPS, and exports the Caddy root certificate.
 
+For a new `.env`, the installer also asks whether app-owned costing tables should
+use a dedicated database or a dedicated schema inside the ERP database. Existing
+deployments default to their current dedicated database and `dbo` schema. The
+selection is stored as:
+
+```dotenv
+COST_APP_STORAGE_MODE=database
+COST_APP_DATABASE=M2_ME
+COST_APP_SCHEMA=dbo
+```
+
+or, for an ERP namespace:
+
+```dotenv
+COST_APP_STORAGE_MODE=erp_schema
+COST_APP_DATABASE=M1_ME
+COST_APP_SCHEMA=CostCalculator
+```
+
+The installer generates `deployment/runtime/reset-selected-storage.sql` for a
+database administrator to review and run. It never executes this destructive
+script or grants the runtime login schema-administration privileges.
+
+An existing rehearsal can replace its selection interactively with
+`sudo bash deployment/ubuntu/install.sh --configure-storage`. This does not copy
+or migrate costing data; the generated reset script is only for a new or
+intentionally disposable target.
+
 After the initial installation, update the application from `origin/master` with:
 
 ```bash
@@ -46,6 +74,9 @@ changed.
   credential.
 - SQL Server uses encrypted ODBC connections. A private CA can be staged under
   `deployment/sql-ca/` rather than disabling certificate validation.
+- App-owned SQL is fully schema-qualified. In ERP-schema mode, the runtime login
+  can be granted writes only to the dedicated app schema while retaining limited
+  read access to required ERP objects.
 - Caddy issues the site certificate from a deployment-local CA. The installer
   exports the public root for controlled distribution to clients.
 - Application users and Caddy state live in named volumes and survive upgrades.
