@@ -1,0 +1,145 @@
+.start-screen {
+  align-items: stretch;
+  display: grid;
+  min-height: 100vh;
+  padding: 18px;
+}
+.home-shell {
+  display: grid;
+  gap: 14px;
+  margin: 0 auto;
+  max-width: 1360px;
+  width: 100%;
+}
+.home-actions, .home-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dashboard-start { align-content: start; }
+.dashboard-start .panel-title { align-items: center; margin-bottom: 4px; }
+.dashboard-start h1 { font-size: 28px; line-height: 1.1; margin: 4px 0 0; }
+.dashboard-form {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 1.2fr) minmax(120px, .45fr) minmax(120px, .45fr) auto;
+  position: relative;
+}
+.part-search-wrap { min-width: 0; position: relative; }
+.dashboard-form .error-box { grid-column: 1 / -1; }
+.recent-dashboard { min-height: 0; }
+.recent-summary {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 8px;
+  justify-content: flex-end;
+  text-transform: uppercase;
+}
+.recent-summary span {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+.home-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+}
+.start-form { align-content: start; display: grid; gap: 12px; position: relative; }
+.recent-table-wrap { display: grid; gap: 10px; min-width: 0; }
+.recent-table {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 566px;
+  overflow: auto;
+}
+.recent-table-head,
+.recent-table-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.4fr) 70px 90px 112px 120px 104px 82px;
+  min-width: 850px;
+  padding: 10px 12px;
+}
+.recent-table-head {
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 950;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 2;
+}
+.recent-table-row {
+  align-items: center;
+  background: #fff;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  min-height: 52px;
+  text-align: left;
+  width: 100%;
+}
+.recent-table-row:hover, .recent-table-row:focus { border-color: var(--blue); box-shadow: inset 0 0 0 3px var(--blue-soft); outline: 0; }
+.part-cell { display: grid; gap: 2px; min-width: 0; }
+.part-cell strong, .part-cell small, .recent-table-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.part-cell small { color: var(--muted); font-size: 12px; font-weight: 750; }
+.cost-composition { display: grid; gap: 4px; min-width: 0; }
+.composition-values {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 10px;
+  font-weight: 950;
+  gap: 6px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.composition-values span { white-space: nowrap; }
+.composition-values .material { color: #175cd3; }
+.composition-values .machine { color: #067647; }
+.composition-values .labor { color: #b54708; }
+.composition-values .external { color: #5925dc; }
+.composition-values .additional { color: #b42318; }
+.chart-segment.empty { background: var(--line); }
+.pager {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.history-pager strong { color: var(--muted); font-size: 12px; min-width: 120px; text-align: center; }
+.empty-state {
+  align-items: center;
+  background: var(--soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-weight: 850;
+  justify-content: center;
+  min-height: 120px;
+}
+.chart-track {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+}
+.chart-segment { min-width: 4px; }
+.chart-segment.material { background: #2e90fa; }
+.chart-segment.machine { background: #12b76a; }
+.chart-segment.labor { background: #f79009; }
+.chart-segment.external { background: #7a5af8; }
+.chart-segment.additional { background: #f04438; }

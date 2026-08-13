@@ -1,0 +1,20 @@
+{
+  "COST_APP_AUTH_REQUIRED": true,
+  "COST_APP_USERS_JSON_FILE": "C:\\ProgramData\\CostCalculator\\secrets\\app_users.json",
+  "COST_DB_PASSWORD_FILE": "C:\\ProgramData\\CostCalculator\\secrets\\db_password.txt",
+  "COST_DB_SERVER": "localhost\\MEZIEREDB22",
+  "COST_DB_USERNAME": "cost_app_access",
+  "COST_DB_DRIVER": "ODBC Driver 18 for SQL Server",
+  "COST_ERP_DATABASE": "M1_ME",
+  "COST_APP_DATABASE": "M2_ME",
+  "COST_DB_TRUST_SERVER_CERTIFICATE": false,
+  "COST_APP_HOST": "127.0.0.1",
+  "COST_APP_PORT": 8000,
+  "COST_APP_WORKERS": 2,
+  "COST_APP_FORWARDED_ALLOW_IPS": "127.0.0.1",
+  "CRYSTAL_RENDER_TIMEOUT_SECONDS": 60,
+  "APP_VERSION": "development",
+  "APP_REPOSITORY": "",
+  "UPDATE_STATUS_FILE": "C:\\ProgramData\\CostCalculator\\update\\update-status.json",
+  "UPDATE_REQUEST_FILE": "C:\\ProgramData\\CostCalculator\\update\\update-request.json"
+}

@@ -1,0 +1,40 @@
+Material Desc
+Job tree
+Cycle times (?)
+Setup/run time (?)
+
+Price of machine time
+Price of operator time
+Waste - saw cuts - leftovers
+
+Material, plating from PO
+Separate markup for external costs and internal costs
+Different markup on total cost for different quantity levels
+
+
+Part number input and description
+current date, last price change, 
+input quantities required, 
+material price populates, indicate whether this is an estimate, vendor id, quote number
+
+operations 
+typical - saw cut (automated/not?) - lathe (setup, run time)
+all operations - (additional cost (per part, global) [tooling cost], automated, 
+
+new part
+
+
+
+Table structure:
+
+PartCosts: ucp
+[partID, partCostID, partRevision, partDescription, dateCosted, materialsRawCost, materialMarkedUpCost, MachineTimeRawCost, MachineTimeMarkedUpCost, laborRawCost, laborMarkedUpCost, externalOperationsRawCost, externalOperationsMarkedUpCost rawCost, MarkedUpCost]
+
+OperationCostLines: uco
+[partCostID, partOperationLineID, workCenterID, operationID, operationDescription, setUptime, cycleTime, batchSize, batchTime, automated, runningHourlyCost, occupiedHourlyCost, MachineCostMarkUp, setupLaborRate, batchResetTime, batchResetLaborRate, laborMarkup, externalJob, lastPO, lastPOCost, externalOperationMarkup]
+
+MaterialCostLines: ucm
+[partCostID, partMaterialLineID, materialID, qtyPerAssembly, isPurchased, lastPO, unitCost, minimumPurchaseQty, 
+
+DefaultCosts: ucd
+[workCenterID, defaultLaborRawCost, defaultMachineRunningTimeCost, defaultMachineOccupiedTimeCost, defaultLaborMarkUp, defaultMachineCostMarkup, defaultExternalOperationMarkup]

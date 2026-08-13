@@ -1,0 +1,14 @@
+secrets/*
+!secrets/README.md
+.env
+static/dist/
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+deployment/windows/CostCalculator.Api.exe
+reporting/CrystalReportRenderer/bin/
+reporting/CrystalReportRenderer/obj/
+deployment/runtime/
+deployment/sql-ca/*.crt
