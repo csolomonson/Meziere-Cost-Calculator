@@ -112,6 +112,35 @@ read_setting() {
     printf '%s' "${result:-$default_value}"
 }
 
+is_ipv4() {
+    local address="$1"
+    local octet
+    local -a octets
+    IFS='.' read -r -a octets <<< "$address"
+    [[ "${#octets[@]}" -eq 4 ]] || return 1
+    for octet in "${octets[@]}"; do
+        [[ "$octet" =~ ^[0-9]{1,3}$ ]] || return 1
+        ((10#$octet <= 255)) || return 1
+    done
+    [[ "$address" != "0.0.0.0" && "$address" != "255.255.255.255" && "$address" != 127.* ]]
+}
+
+detect_primary_ipv4() {
+    local candidate
+    candidate="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit } }')" || candidate=""
+    if is_ipv4 "$candidate"; then
+        printf '%s' "$candidate"
+        return 0
+    fi
+    for candidate in $(hostname -I 2>/dev/null); do
+        if is_ipv4 "$candidate"; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 configure_environment() {
     local env_file="$project_root/.env"
     if [[ -f "$env_file" ]]; then
@@ -123,9 +152,12 @@ configure_environment() {
     [[ -t 0 ]] || fail ".env is missing and input is not interactive. Create it from .env.example before deployment."
 
     log "Creating the non-secret deployment configuration"
-    local app_hostname db_server db_username erp_database app_database app_schema storage_choice storage_mode app_version trust_certificate image_tag
+    local app_hostname app_ip_address app_ip_default db_server db_username erp_database app_database app_schema storage_choice storage_mode app_version trust_certificate image_tag
     app_hostname="$(read_setting "Application DNS hostname" "$(hostname -f 2>/dev/null || hostname)")"
     [[ "$app_hostname" =~ ^[A-Za-z0-9.-]+$ && "$app_hostname" != .* && "$app_hostname" != *. ]] || fail "Enter a DNS hostname without a scheme, port, or path."
+    app_ip_default="$(detect_primary_ipv4)" || fail "Could not detect the VM IPv4 address. Configure networking, then rerun the installer."
+    app_ip_address="$(read_setting "Application VM IPv4 address" "$app_ip_default")"
+    is_ipv4 "$app_ip_address" || fail "Enter a usable IPv4 address assigned to this VM."
     db_server="$(read_setting "SQL Server host and fixed TCP port" "sqlserver.example.internal,1433")"
     [[ "$db_server" =~ ,[0-9]+$ ]] || fail "Use a fixed SQL Server TCP endpoint in host,port form; named instances are not supported from Linux."
     [[ "$db_server" != *\\* ]] || fail "Named SQL Server instances are not supported. Use host,port."
@@ -155,13 +187,14 @@ configure_environment() {
     fi
     image_tag="cost-calculator:${app_version//[^A-Za-z0-9_.-]/-}"
 
-    for value in "$app_hostname" "$db_server" "$db_username" "$erp_database" "$storage_mode" "$app_database" "$app_schema" "$app_version" "$image_tag"; do
+    for value in "$app_hostname" "$app_ip_address" "$db_server" "$db_username" "$erp_database" "$storage_mode" "$app_database" "$app_schema" "$app_version" "$image_tag"; do
         [[ "$value" != *$'\n'* && "$value" != *$'\r'* && "$value" != *'#'* ]] || fail "Configuration values cannot contain line breaks or #."
     done
 
     umask 077
     {
         printf 'APP_HOSTNAME=%s\n' "$app_hostname"
+        printf 'APP_IP_ADDRESS=%s\n' "$app_ip_address"
         printf 'COST_DB_SERVER=%s\n' "$db_server"
         printf 'COST_DB_USERNAME=%s\n' "$db_username"
         printf 'COST_DB_DRIVER=ODBC Driver 18 for SQL Server\n'
@@ -176,6 +209,18 @@ configure_environment() {
         printf 'APP_REPOSITORY=\n'
     } > "$env_file"
     chmod 0600 "$env_file"
+}
+
+ensure_network_settings() {
+    local env_file="$project_root/.env"
+    local app_ip_address
+    app_ip_address="$(env_value APP_IP_ADDRESS)"
+    if [[ -z "$app_ip_address" ]]; then
+        app_ip_address="$(detect_primary_ipv4)" || fail "APP_IP_ADDRESS is missing and the VM IPv4 address could not be detected."
+        printf 'APP_IP_ADDRESS=%s\n' "$app_ip_address" >> "$env_file"
+        chmod 0600 "$env_file"
+        log "Added the detected VM IPv4 address $app_ip_address to .env"
+    fi
 }
 
 write_storage_settings() {
@@ -270,8 +315,9 @@ env_value() {
 }
 
 validate_environment() {
-    local app_hostname db_server db_username erp_database storage_mode app_database app_schema app_version image_tag
+    local app_hostname app_ip_address db_server db_username erp_database storage_mode app_database app_schema app_version image_tag
     app_hostname="$(env_value APP_HOSTNAME)"
+    app_ip_address="$(env_value APP_IP_ADDRESS)"
     db_server="$(env_value COST_DB_SERVER)"
     db_username="$(env_value COST_DB_USERNAME)"
     erp_database="$(env_value COST_ERP_DATABASE)"
@@ -282,6 +328,8 @@ validate_environment() {
     image_tag="$(env_value COST_APP_IMAGE)"
 
     [[ "$app_hostname" =~ ^[A-Za-z0-9.-]+$ && "$app_hostname" != "localhost" ]] || fail ".env must set APP_HOSTNAME to the production DNS hostname."
+    is_ipv4 "$app_ip_address" || fail ".env must set APP_IP_ADDRESS to a usable IPv4 address assigned to this VM."
+    ip -4 -o address show scope global | awk '{ split($4, address, "/"); print address[1] }' | grep -Fqx "$app_ip_address" || fail "APP_IP_ADDRESS ($app_ip_address) is not assigned to this VM."
     [[ "$db_server" =~ ,[0-9]+$ && "$db_server" != *\\* ]] || fail ".env must set COST_DB_SERVER in host,port form."
     for identifier in "$db_username" "$erp_database" "$app_database" "$app_schema"; do
         [[ "$identifier" =~ ^[A-Za-z_][A-Za-z0-9_@\$-]{0,127}$ ]] || fail "Database, schema, and SQL login names must use supported SQL identifier characters."
@@ -432,7 +480,7 @@ remember_previous_image() {
 }
 
 deploy() {
-    local app_hostname current_container current_image desired_image
+    local app_hostname app_ip_address current_container current_image desired_image
     cd "$project_root"
     docker compose config --quiet
 
@@ -458,11 +506,12 @@ deploy() {
     log "Starting the application and waiting for database-aware readiness"
     docker compose up -d --wait --remove-orphans
     app_hostname="$(env_value APP_HOSTNAME)"
-    curl --fail --silent --show-error --insecure --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/ready" >/dev/null
-
+    app_ip_address="$(env_value APP_IP_ADDRESS)"
     mkdir -p "$runtime_dir"
     docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt "$runtime_dir/caddy-root.crt"
     chmod 0644 "$runtime_dir/caddy-root.crt"
+    curl --fail --silent --show-error --cacert "$runtime_dir/caddy-root.crt" --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/ready" >/dev/null
+    curl --fail --silent --show-error --cacert "$runtime_dir/caddy-root.crt" "https://$app_ip_address/api/ready" >/dev/null
 }
 
 main() {
@@ -473,6 +522,7 @@ main() {
     mkdir -p "$runtime_dir"
     install_docker
     configure_environment
+    ensure_network_settings
     ensure_storage_settings
     validate_environment
     render_database_setup
@@ -481,7 +531,9 @@ main() {
 
     log "Deployment succeeded"
     docker compose ps
-    printf '\nApplication URL: https://%s/\n' "$(env_value APP_HOSTNAME)"
+    printf '\nApplication URLs:\n'
+    printf '  Hostname: https://%s/\n' "$(env_value APP_HOSTNAME)"
+    printf '  IPv4:    https://%s/\n' "$(env_value APP_IP_ADDRESS)"
     printf 'Client trust certificate: %s\n' "$runtime_dir/caddy-root.crt"
     printf 'Destructive database setup reference (do not rerun against retained data): %s\n' "$runtime_dir/reset-selected-storage.sql"
     printf 'Verification command: sudo bash deployment/ubuntu/verify.sh\n'

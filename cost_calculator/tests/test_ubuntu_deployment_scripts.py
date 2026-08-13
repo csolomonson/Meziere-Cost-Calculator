@@ -10,6 +10,8 @@ VERIFIER = (PROJECT_ROOT / "deployment" / "ubuntu" / "verify.sh").read_text(
     encoding="utf-8"
 )
 COMPOSE = (PROJECT_ROOT / "compose.yaml").read_text(encoding="utf-8")
+CADDY = (PROJECT_ROOT / "deployment" / "Caddyfile").read_text(encoding="utf-8")
+ENV_EXAMPLE = (PROJECT_ROOT / ".env.example").read_text(encoding="utf-8")
 UPDATER = (PROJECT_ROOT / "deployment" / "ubuntu" / "update.sh").read_text(
     encoding="utf-8"
 )
@@ -105,6 +107,22 @@ class UbuntuDeploymentScriptTests(unittest.TestCase):
 
     def test_compose_passes_the_selected_schema_to_the_application(self):
         self.assertIn("COST_APP_SCHEMA: ${COST_APP_SCHEMA:-dbo}", COMPOSE)
+
+    def test_caddy_serves_the_hostname_and_vm_ipv4_address(self):
+        self.assertIn("{$APP_HOSTNAME}:443, {$APP_IP_ADDRESS}:443", CADDY)
+        self.assertIn("default_sni {$APP_IP_ADDRESS}", CADDY)
+        self.assertIn("APP_IP_ADDRESS: ${APP_IP_ADDRESS:-127.0.0.1}", COMPOSE)
+        self.assertIn("APP_IP_ADDRESS=192.0.2.10", ENV_EXAMPLE)
+
+    def test_installer_detects_backfills_and_verifies_the_vm_ipv4_address(self):
+        self.assertIn("detect_primary_ipv4()", INSTALLER)
+        self.assertIn("ensure_network_settings()", INSTALLER)
+        self.assertIn("APP_IP_ADDRESS=%s", INSTALLER)
+        self.assertIn('"https://$app_ip_address/api/ready"', INSTALLER)
+        self.assertIn('"https://$app_ip_address/api/health"', VERIFIER)
+        self.assertIn('"https://$app_ip_address/api/ready"', VERIFIER)
+        self.assertIn('--cacert "$runtime_dir/caddy-root.crt"', INSTALLER)
+        self.assertIn('--cacert "$ca_certificate"', VERIFIER)
 
 
 if __name__ == "__main__":

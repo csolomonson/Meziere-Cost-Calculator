@@ -59,6 +59,7 @@ services:
         condition: service_healthy
     environment:
       APP_HOSTNAME: ${APP_HOSTNAME:-localhost}
+      APP_IP_ADDRESS: ${APP_IP_ADDRESS:-127.0.0.1}
     ports:
       - "443:443"
     read_only: true

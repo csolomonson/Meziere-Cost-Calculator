@@ -143,8 +143,11 @@ sudo bash deployment/ubuntu/update.sh
 Pass a branch name, such as `codex`, only when intentionally updating a rehearsal
 server from that branch.
 
-Access the application through HTTPS on port 443. The production image contains the
-complete browser application and does not require internet access while running.
+Access the application through HTTPS on port 443 by either the configured hostname
+or the VM IPv4 address. Both certificates use the same deployment-local Caddy CA,
+so clients must trust the exported `deployment/runtime/caddy-root.crt`. The
+production image contains the complete browser application and does not require
+internet access while running.
 Administrators can manage users and request an update through the UI; actual update
 installation remains isolated in the external supervisor described in the deployment
 guide.
