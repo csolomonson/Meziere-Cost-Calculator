@@ -161,8 +161,11 @@ Rehearse on the final VM or an exact clone with the same network rules:
 4. Verify a missing or incorrect login returns 401, then sign in as administrator.
 5. Search for a part, calculate a representative cost, save it as current, reopen
    it, and confirm the saved user identity.
-6. Open the PDF and compare its identity, totals, materials, operations, notes, and
-   page numbers with the saved worksheet. Include a multi-page example.
+6. Open both PDFs. Compare the internal report's sources, equations, totals, notes,
+   and reconciliation with the saved worksheet. Confirm the customer report lists
+   the unit and extended charge for every backflushed material and operation without
+   exposing internal rates or margins.
+   Include a multi-page internal example.
 7. Add a temporary user, reset its password, and remove it.
 8. Restart the VM. Confirm Docker starts the application and rerun `verify.sh`.
 9. Exercise `rollback.sh` with two harmless version tags, then redeploy the final
@@ -226,7 +229,8 @@ rehearsal):
 2. confirm a bad password is rejected;
 3. sign in and search for a known part;
 4. calculate, save, reopen, and verify one representative costing run; and
-5. select **Open PDF** and compare the unit and total costs.
+5. open **Internal PDF** and **Customer PDF**, compare their unit and total prices,
+   and confirm their internal versus customer disclosure is appropriate.
 
 Record the version from `/api/version`, the tester, and the pass time. The change
 owner can then announce service availability.

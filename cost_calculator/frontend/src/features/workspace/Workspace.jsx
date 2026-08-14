@@ -167,7 +167,8 @@ export function Workspace({ run, setRun, original, setOriginal, setMode, draft, 
   async function setHistoryCurrent(history) { await readApiResponse(await fetch("/api/costs/current", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ part_cost_id: history.ucpPartCostID }) })); setHistoryTarget((target) => target ? { ...target, rows: target.rows.map((row) => ({ ...row, ucpIsCurrent: row.ucpPartCostID === history.ucpPartCostID })) } : target); }
   const activeRow = focus?.kind === "material" ? run.material_lines.find((row) => row._id === focus.id) : focus?.kind === "operation" ? run.operation_lines.find((row) => row._id === focus.id) : null;
   const originalRow = focus?.kind === "material" ? original.material_lines.find((row) => row._id === focus.id) : focus?.kind === "operation" ? original.operation_lines.find((row) => row._id === focus.id) : null;
-  const reportUrl = partCostReportUrl(run.part_cost.ucpPartCostID);
+  const internalReportUrl = partCostReportUrl(run.part_cost.ucpPartCostID, "internal");
+  const customerReportUrl = partCostReportUrl(run.part_cost.ucpPartCostID, "customer");
   return <div className="workspace">
     <header className={"topbar " + (returnCrumb ? "with-return" : "")}>
       <Button tone="secondary" className="home-icon" onClick={exitWorksheet}>Exit</Button>
@@ -177,7 +178,7 @@ export function Workspace({ run, setRun, original, setOriginal, setMode, draft, 
       <Stat label="Unit marked up" field="ucpUnitMarkedUpCost" value={run.part_cost.ucpUnitMarkedUpCost} />
       <RetailStat part={run.part_cost} />
       <Stat label="Total" field="ucpTotalMarkedUpCost" value={run.part_cost.ucpTotalMarkedUpCost} />
-      <div className="save-box"><div>{reportUrl ? <a className="button secondary" href={reportUrl} target="_blank" rel="noopener noreferrer" title="Open the last saved version as a PDF">Open PDF</a> : <Button tone="secondary" disabled title="Save this worksheet before opening its report">Open PDF</Button>}{returnCrumb ? <><Button tone="secondary" onClick={onReturnToParent}>Back to parent</Button><Button onClick={saveCurrentAndReturn}>Save current & return</Button></> : <><Button tone="secondary" onClick={() => saveWorksheet(false)}>Save</Button><Button onClick={() => saveWorksheet(true)}>Save current</Button></>}</div>{saveState && <span>{saveState}</span>}</div>
+      <div className="save-box"><div>{internalReportUrl ? <><a className="button secondary" href={internalReportUrl} target="_blank" rel="noopener noreferrer" title="Open the detailed internal cost analysis from the last saved version">Internal PDF</a><a className="button secondary" href={customerReportUrl} target="_blank" rel="noopener noreferrer" title="Open the customer-safe cost summary from the last saved version">Customer PDF</a></> : <><Button tone="secondary" disabled title="Save this worksheet before opening its reports">Internal PDF</Button><Button tone="secondary" disabled title="Save this worksheet before opening its reports">Customer PDF</Button></>}{returnCrumb ? <><Button tone="secondary" onClick={onReturnToParent}>Back to parent</Button><Button onClick={saveCurrentAndReturn}>Save current & return</Button></> : <><Button tone="secondary" onClick={() => saveWorksheet(false)}>Save</Button><Button onClick={() => saveWorksheet(true)}>Save current</Button></>}</div>{saveState && <span>{saveState}</span>}</div>
     </header>
     <nav className="tabs">
       <button className={view === "review" ? "active" : ""} onClick={() => setView("review")}>Review</button>

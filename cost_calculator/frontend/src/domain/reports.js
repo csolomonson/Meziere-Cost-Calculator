@@ -1,6 +1,6 @@
-export function partCostReportUrl(partCostId) {
+export function partCostReportUrl(partCostId, audience = "internal") {
   const id = Number(partCostId);
-  return Number.isInteger(id) && id > 0
-    ? "/api/reports/part-cost/" + encodeURIComponent(id)
-    : "";
+  if (!Number.isInteger(id) || id <= 0) return "";
+  if (audience !== "internal" && audience !== "customer") return "";
+  return "/api/reports/part-cost/" + encodeURIComponent(id) + "/" + audience;
 }

@@ -95,8 +95,8 @@ The API is grouped as follows:
   purchase orders;
 - settings: global/part markup breaks and machine/shift defaults;
 - administration: file-backed user management for the `administrators` group;
-- reporting: authenticated inline PDFs for saved `PartCostID` values under
-  `/api/reports`;
+- reporting: authenticated internal cost-audit and customer-safe PDFs for saved
+  `PartCostID` values under `/api/reports`;
 - system: health, session, version, update contract, and conversion calculator.
 
 When running locally, the authenticated OpenAPI UI is available at `/docs`.

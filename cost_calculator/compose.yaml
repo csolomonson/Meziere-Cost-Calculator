@@ -23,6 +23,7 @@ services:
       COST_DB_CONNECTION_TIMEOUT_SECONDS: ${COST_DB_CONNECTION_TIMEOUT_SECONDS:-5}
       APP_VERSION: ${APP_VERSION:-development}
       APP_REPOSITORY: ${APP_REPOSITORY:-}
+      COST_REPORT_COMPANY_NAME: ${COST_REPORT_COMPANY_NAME:-Meziere Enterprises}
       UPDATE_STATUS_FILE: /var/lib/cost-app/update-status.json
       UPDATE_REQUEST_FILE: /var/lib/cost-app/update-request.json
     secrets:
