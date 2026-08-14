@@ -33,8 +33,8 @@ The **Internal Cost Analysis** is a self-contained cost audit. It includes:
 - every saved operation in routing order, including work center, demand, batches,
   resets, time drivers, labor and machine equations, or outside-processing purchase
   source, followed by its cost contribution;
-- a reconciliation of line detail to saved header totals, automatic review flags,
-  and internal notes.
+- a reconciliation of the authoritative saved material and operation line totals
+  to the saved header totals, automatic review flags, and internal notes.
 
 The **Customer Cost Summary** is an itemized receipt. It includes the part identity,
 quantity, unit and extended price, then shows a unit and extended charge for every

@@ -817,43 +817,38 @@ def _reconciliation(
     materials: pd.DataFrame,
     styles: dict[str, ParagraphStyle],
 ) -> list[object]:
-    mappings = [
-        ("Materials", "ucpMaterialsRawCost", "ucpMaterialsMarkedUpCost", "ucmMaterialsRawCost", "ucmMaterialsMarkedUpCost", None, None),
-        ("Machine", "ucpMachineTimeRawCost", "ucpMachineTimeMarkedUpCost", "ucmMachineTimeRawCost", "ucmMachineTimeMarkedUpCost", "ucoMachineRawCost", "ucoMachineMarkedUpCost"),
-        ("Labor", "ucpLaborRawCost", "ucpLaborMarkedUpCost", "ucmLaborRawCost", "ucmLaborMarkedUpCost", "ucoLaborRawCost", "ucoLaborMarkedUpCost"),
-        ("Outside processing", "ucpExternalOperationsRawCost", "ucpExternalOperationsMarkedUpCost", "ucmExternalOperationsRawCost", "ucmExternalOperationsMarkedUpCost", "ucoExternalOperationRawCost", "ucoExternalOperationMarkedUpCost"),
-        ("Additional", "ucpAdditionalRawCost", "ucpAdditionalMarkedUpCost", "ucmAdditionalRawCost", "ucmAdditionalMarkedUpCost", "ucoAdditionalCostRawCost", "ucoAdditionalCostMarkedUpCost"),
-    ]
-    data: list[list[object]] = [["Bucket", "Header raw", "Lines raw", "Variance", "Header price", "Lines price", "Variance"]]
-    line_raw_total = 0.0
-    line_price_total = 0.0
-    for label, header_raw_key, header_price_key, material_raw_key, material_price_key, op_raw_key, op_price_key in mappings:
-        header_raw = _float(part.get(header_raw_key))
-        header_price = _float(part.get(header_price_key))
-        line_raw = _sum(materials, material_raw_key) + (_sum(operations, op_raw_key) if op_raw_key else 0)
-        line_price = _sum(materials, material_price_key) + (_sum(operations, op_price_key) if op_price_key else 0)
-        line_raw_total += line_raw
-        line_price_total += line_price
-        data.append([label, _money(header_raw), _money(line_raw), _money(header_raw - line_raw), _money(header_price), _money(line_price), _money(header_price - line_price)])
     header_raw_total = _float(part.get("ucpTotalRawCost"))
     header_price_total = _float(part.get("ucpTotalMarkedUpCost"))
-    data.append(["Total", _money(header_raw_total), _money(line_raw_total), _money(header_raw_total - line_raw_total), _money(header_price_total), _money(line_price_total), _money(header_price_total - line_price_total)])
+    material_raw_total = _sum(materials, "ucmRawCost")
+    material_price_total = _sum(materials, "ucmMarkedUpCost")
+    operation_raw_total = _sum(operations, "ucoLineRawCost")
+    operation_price_total = _sum(operations, "ucoLineMarkedUpCost")
+    line_raw_total = material_raw_total + operation_raw_total
+    line_price_total = material_price_total + operation_price_total
+    data: list[list[object]] = [
+        ["Source", "Raw cost", "Calculated price"],
+        ["Saved header totals", _money(header_raw_total), _money(header_price_total)],
+        ["Saved material lines", _money(material_raw_total), _money(material_price_total)],
+        ["Saved operation lines", _money(operation_raw_total), _money(operation_price_total)],
+        ["All saved lines", _money(line_raw_total), _money(line_price_total)],
+        ["Variance", _money(header_raw_total - line_raw_total), _money(header_price_total - line_price_total)],
+    ]
     audit = KeepTogether(
         [
             Paragraph("Reconciliation and review flags", styles["section"]),
             _rule(),
             Paragraph(
-                "This audit ties the saved header totals back to the saved material and operation lines. Non-zero variance indicates an inconsistent saved snapshot that should not be used for quoting.",
+                "This audit compares the saved header totals with the authoritative raw and calculated totals stored on each included material and operation line. A non-zero variance indicates an inconsistent saved snapshot that should not be used for quoting.",
                 styles["body"],
             ),
             _plain_table(
                 data,
-                [1.2 * inch, 1.0 * inch, 1.0 * inch, 0.9 * inch, 1.1 * inch, 1.1 * inch, 1.0 * inch],
+                [4.2 * inch, 1.55 * inch, 1.55 * inch],
                 header=True,
                 repeat_rows=1,
-                right_columns=(1, 2, 3, 4, 5, 6),
+                right_columns=(1, 2),
                 bold_last=True,
-                font_size=6.8,
+                font_size=7.2,
             ),
         ]
     )

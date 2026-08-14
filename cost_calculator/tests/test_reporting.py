@@ -297,6 +297,41 @@ class ReportLabRendererTests(unittest.TestCase):
         self.assertIn("$52.50", customer_text)
         self.assertNotIn("PO-88214-3", customer_text)
 
+    def test_reconciliation_uses_persisted_material_line_totals(self):
+        part = part_cost_frame().astype(object)
+        part.loc[
+            0,
+            [
+                "ucpMaterialsRawCost",
+                "ucpMaterialsMarkedUpCost",
+                "ucpMachineTimeRawCost",
+                "ucpMachineTimeMarkedUpCost",
+                "ucpLaborRawCost",
+                "ucpLaborMarkedUpCost",
+                "ucpExternalOperationsRawCost",
+                "ucpExternalOperationsMarkedUpCost",
+                "ucpAdditionalRawCost",
+                "ucpAdditionalMarkedUpCost",
+                "ucpTotalRawCost",
+                "ucpTotalMarkedUpCost",
+                "ucpUnitRawCost",
+                "ucpUnitMarkedUpCost",
+            ],
+        ] = [0.229, 0.229, 0, 0, 0, 0, 0, 0, 0, 0, 0.229, 0.229, 0.229, 0.229]
+        materials = material_frame().drop(
+            columns=["ucmMaterialsRawCost", "ucmMaterialsMarkedUpCost"]
+        )
+        materials.loc[0, ["ucmRawCost", "ucmMarkedUpCost"]] = [0.229, 0.229]
+
+        _, text = pdf_text(
+            render_internal_part_cost_document(part, pd.DataFrame(), materials)
+        )
+
+        self.assertIn("Saved material lines", text)
+        self.assertRegex(text, r"(?s)Saved material lines\s+\$0\.23\s+\$0\.23")
+        self.assertRegex(text, r"(?s)All saved lines\s+\$0\.23\s+\$0\.23")
+        self.assertRegex(text, r"(?s)Variance\s+\$0\.00\s+\$0\.00")
+
     def test_small_internal_summary_keeps_every_line_on_the_first_page(self):
         part, operations, materials = representative_report_frames()
         reader, _ = pdf_text(render_internal_part_cost_document(part, operations, materials))
