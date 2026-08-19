@@ -1,4 +1,4 @@
-"""Fail-fast production checks used before starting the application container."""
+"""Fail-fast production checks used before starting the native VM service."""
 
 from __future__ import annotations
 

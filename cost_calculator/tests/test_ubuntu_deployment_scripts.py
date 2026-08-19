@@ -5,141 +5,104 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PROJECT_ROOT.parent
 DEPLOYMENT = PROJECT_ROOT / "deployment"
+UBUNTU = DEPLOYMENT / "ubuntu"
 
-DOCKERFILE = (PROJECT_ROOT / "Dockerfile").read_text(encoding="utf-8")
-COMPOSE = (PROJECT_ROOT / "compose.yaml").read_text(encoding="utf-8")
-DOCKERIGNORE = (PROJECT_ROOT / ".dockerignore").read_text(encoding="utf-8")
+INSTALL = (UBUNTU / "install.sh").read_text(encoding="utf-8")
+CONFIGURE = (UBUNTU / "configure.sh").read_text(encoding="utf-8")
+VERIFY = (UBUNTU / "verify.sh").read_text(encoding="utf-8")
+ROLLBACK = (UBUNTU / "rollback.sh").read_text(encoding="utf-8")
+UPDATE = (UBUNTU / "update.sh").read_text(encoding="utf-8")
+SERVICE = (UBUNTU / "cost-calculator.service").read_text(encoding="utf-8")
+CADDY_OVERRIDE = (UBUNTU / "caddy-override.conf").read_text(encoding="utf-8")
 CADDY = (DEPLOYMENT / "Caddyfile").read_text(encoding="utf-8")
-ENTRYPOINT = (DEPLOYMENT / "container-entrypoint.sh").read_text(encoding="utf-8")
-CONFIGURE = (DEPLOYMENT / "configure-image.sh").read_text(encoding="utf-8")
-VALIDATOR = (DEPLOYMENT / "configure-container.sh").read_text(encoding="utf-8")
-STARTER = (DEPLOYMENT / "start-app.sh").read_text(encoding="utf-8")
 WORKFLOW = (
-    REPOSITORY_ROOT / ".github" / "workflows" / "publish-container-release.yml"
+    REPOSITORY_ROOT / ".github" / "workflows" / "publish-vm-release.yml"
 ).read_text(encoding="utf-8")
 
 
-class ContainerDeploymentContractTests(unittest.TestCase):
-    def test_release_workflow_publishes_multi_platform_image_and_attestation(self):
-        self.assertIn('tags:\n      - "v*"', WORKFLOW)
-        self.assertIn("linux/amd64,linux/arm64", WORKFLOW)
-        self.assertIn("docker/build-push-action@v7", WORKFLOW)
-        self.assertIn("push: true", WORKFLOW)
-        self.assertIn("actions/attest@v4", WORKFLOW)
-        self.assertIn("subject-digest: ${{ steps.image.outputs.digest }}", WORKFLOW)
-
-    def test_release_contains_an_immutable_image_reference_not_a_source_bundle(self):
-        self.assertIn("cost-calculator-%s-image.txt", WORKFLOW)
-        self.assertIn("'%s:%s@%s\\n'", WORKFLOW)
-        self.assertIn("gh release create", WORKFLOW)
-        self.assertNotIn("tar ", WORKFLOW)
-        self.assertNotIn("compose.yaml", WORKFLOW)
-        self.assertNotIn("deployment/release.env", WORKFLOW)
-
-    def test_image_bundles_caddy_and_uses_one_unprivileged_runtime(self):
-        self.assertIn("FROM caddy:2.11.4-alpine AS caddy", DOCKERFILE)
-        self.assertIn("COPY --from=caddy /usr/bin/caddy /usr/bin/caddy", DOCKERFILE)
-        self.assertIn("--uid 10001 --ingroup costapp", DOCKERFILE)
-        self.assertIn("USER costapp", DOCKERFILE)
-        self.assertIn("EXPOSE 8443", DOCKERFILE)
-        self.assertIn(
-            "ln -s /var/lib/cost-calculator/ca/ca-certificates.crt "
-            "/etc/ssl/certs/ca-certificates.crt",
-            DOCKERFILE,
-        )
-        self.assertIn('["/app/deployment/container-entrypoint.sh"]', DOCKERFILE)
-        self.assertIn('["serve"]', DOCKERFILE)
-
-    def test_compose_is_an_optional_one_image_wrapper(self):
-        self.assertNotIn("build:", COMPOSE)
-        self.assertIn("COST_APP_IMAGE", COMPOSE)
-        self.assertIn('"443:8443"', COMPOSE)
-        self.assertIn("app_state:/var/lib/cost-calculator", COMPOSE)
-        self.assertIn("name: cost-calculator-data", COMPOSE)
-        self.assertNotIn("proxy:", COMPOSE)
-        self.assertNotIn("secrets:", COMPOSE)
-
-    def test_caddy_and_uvicorn_communicate_only_over_container_loopback(self):
-        self.assertIn("https://{$APP_HOSTNAME},", CADDY)
-        self.assertIn("https://{$APP_IP_ADDRESS}", CADDY)
-        self.assertIn("servers :8443", CADDY)
-        self.assertIn("protocols h1 h2", CADDY)
-        self.assertIn("reverse_proxy 127.0.0.1:8000", CADDY)
-        self.assertIn("--host 127.0.0.1", STARTER)
-        self.assertIn('--forwarded-allow-ips="127.0.0.1"', STARTER)
-
-    def test_startup_preflights_before_starting_both_processes(self):
-        validation_index = STARTER.index("configure-container.sh")
-        preflight_index = STARTER.index("python -m tools.deployment_preflight")
-        uvicorn_index = STARTER.index("uvicorn api:app")
-        caddy_index = STARTER.index("caddy run")
-        self.assertLess(validation_index, preflight_index)
-        self.assertLess(preflight_index, uvicorn_index)
-        self.assertLess(preflight_index, caddy_index)
-        self.assertIn("trap handle_signal TERM INT", STARTER)
-
-    def test_entrypoint_exposes_configuration_and_operational_commands(self):
-        for command in (
-            "configure)",
-            "install-ca)",
-            "serve)",
-            "preflight)",
-            "database-setup)",
-            "export-ca)",
-        ):
-            self.assertIn(command, ENTRYPOINT)
-        self.assertIn("/var/lib/cost-calculator", ENTRYPOINT)
-        self.assertNotIn("eval ", ENTRYPOINT)
-
-    def test_configuration_is_written_only_to_persistent_state(self):
-        self.assertIn(
-            'state_root="${COST_APP_STATE_ROOT:-/var/lib/cost-calculator}"',
-            CONFIGURE,
-        )
-        self.assertIn('config_file="$state_root/config/runtime.env"', CONFIGURE)
-        self.assertIn('password_file="$state_root/secrets/db_password.txt"', CONFIGURE)
-        self.assertIn('users_file="$state_root/users/app_users.json"', CONFIGURE)
-        self.assertIn(
-            'database_setup_file="$state_root/database/reset-selected-storage.sql"',
-            CONFIGURE,
-        )
-        self.assertIn("python -m tools.create_user_seed", CONFIGURE)
-        self.assertIn("container-entrypoint.sh preflight", CONFIGURE)
-        self.assertIn("python -m tools.deployment_preflight", ENTRYPOINT)
-        self.assertNotIn("docker.sock", CONFIGURE + STARTER + COMPOSE)
-
-    def test_runtime_validator_requires_configuration_secrets_users_and_ca(self):
+class NativeVmDeploymentContractTests(unittest.TestCase):
+    def test_container_deployment_assets_are_removed(self):
         for relative_path in (
-            "config/runtime.env",
-            "users/app_users.json",
-            "secrets/db_password.txt",
-            "ca/ca-certificates.crt",
+            "Dockerfile",
+            "compose.yaml",
+            ".dockerignore",
+            "deployment/container-entrypoint.sh",
+            "deployment/configure-container.sh",
+            "deployment/configure-image.sh",
+            "deployment/start-app.sh",
         ):
-            self.assertIn(relative_path, VALIDATOR)
-        self.assertIn("missing or unreadable", VALIDATOR)
-        self.assertIn("/usr/local/share/cost-calculator/ca-certificates.crt", VALIDATOR)
+            self.assertFalse((PROJECT_ROOT / relative_path).exists(), relative_path)
+        self.assertFalse(
+            (REPOSITORY_ROOT / ".github/workflows/publish-container-release.yml").exists()
+        )
 
-    def test_configuration_preserves_database_or_erp_schema_storage_modes(self):
-        self.assertIn("Costing storage (database/schema)", CONFIGURE)
-        self.assertIn('storage_mode="database"', CONFIGURE)
-        self.assertIn('storage_mode="erp_schema"', CONFIGURE)
+    def test_release_workflow_publishes_an_attested_vm_archive(self):
+        self.assertIn('tags:\n      - "v*"', WORKFLOW)
+        self.assertIn("ubuntu-vm.tar.gz", WORKFLOW)
+        self.assertIn("static/dist", WORKFLOW)
+        self.assertIn("actions/attest@v4", WORKFLOW)
+        self.assertIn("subject-path:", WORKFLOW)
+        self.assertIn("gh release create", WORKFLOW)
+        self.assertNotIn("docker/", WORKFLOW)
+        self.assertNotIn("ghcr.io", WORKFLOW)
+
+    def test_installer_targets_ubuntu_and_installs_host_dependencies(self):
+        self.assertIn('"${VERSION_ID:-}" == "24.04"', INSTALL)
+        self.assertIn("python3-venv", INSTALL)
+        self.assertIn("https://deb.nodesource.com/node_22.x", INSTALL)
+        self.assertIn("Node.js 22 is required", INSTALL)
+        self.assertIn("msodbcsql18", INSTALL)
+        self.assertIn("apt-get install -y caddy", INSTALL)
+        self.assertIn("pnpm run build", INSTALL)
+        self.assertIn('python3 -m venv "$staging_dir/.venv"', INSTALL)
+
+    def test_installer_preflights_before_atomically_switching_release(self):
+        self.assertLess(INSTALL.index("preflight_release\n"), INSTALL.index("activate_release\n"))
+        self.assertIn('releases/$app_version', INSTALL)
+        self.assertIn('mv -Tf -- "$temporary_link" "$install_root/current"', INSTALL)
+        self.assertIn("previous-release", INSTALL)
+
+    def test_configuration_persists_outside_releases(self):
+        self.assertIn("/etc/cost-calculator", CONFIGURE)
+        self.assertIn("/var/lib/cost-calculator", CONFIGURE)
+        self.assertIn("users/app_users.json", CONFIGURE)
+        self.assertIn("secrets/db_password.txt", CONFIGURE)
         self.assertIn("reset-selected-storage.sql", CONFIGURE)
-        self.assertIn('print "IF DB_ID', CONFIGURE)
-        self.assertIn('print "IF SCHEMA_ID', CONFIGURE)
+        self.assertIn("tools.create_user_seed", CONFIGURE)
         self.assertIn("GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA", CONFIGURE)
 
-    def test_runtime_data_and_private_ca_are_excluded_from_build_context(self):
-        for ignored_path in (
-            ".env",
-            "secrets",
-            "deployment/runtime",
-            "deployment/sql-ca/*.crt",
-        ):
-            self.assertIn(ignored_path, DOCKERIGNORE)
+    def test_systemd_runs_uvicorn_as_a_restricted_service_account(self):
+        self.assertIn("User=cost-calculator", SERVICE)
+        self.assertIn("EnvironmentFile=/etc/cost-calculator/runtime.env", SERVICE)
+        self.assertIn("--host 127.0.0.1 --port 8000", SERVICE)
+        self.assertIn("ExecStartPre=", SERVICE)
+        self.assertIn("tools.deployment_preflight", SERVICE)
+        self.assertIn("NoNewPrivileges=true", SERVICE)
+        self.assertIn("ProtectSystem=strict", SERVICE)
+        self.assertIn("CapabilityBoundingSet=", SERVICE)
 
-    def test_obsolete_host_deployment_scripts_are_gone(self):
-        ubuntu_dir = DEPLOYMENT / "ubuntu"
-        self.assertFalse(any(ubuntu_dir.glob("*.sh")))
+    def test_caddy_is_a_separate_host_service_on_https(self):
+        self.assertIn("servers :443", CADDY)
+        self.assertIn("reverse_proxy 127.0.0.1:8000", CADDY)
+        self.assertIn("tls internal", CADDY)
+        self.assertIn("EnvironmentFile=/etc/cost-calculator/caddy.env", CADDY_OVERRIDE)
+        self.assertIn("XDG_DATA_HOME=/var/lib/caddy/data", CADDY_OVERRIDE)
+
+    def test_verifier_checks_services_preflight_and_both_addresses(self):
+        self.assertIn("systemctl is-active --quiet cost-calculator.service", VERIFY)
+        self.assertIn("systemctl is-active --quiet caddy.service", VERIFY)
+        self.assertIn("tools.deployment_preflight", VERIFY)
+        self.assertIn('https://$APP_HOSTNAME/api/ready', VERIFY)
+        self.assertIn('https://$APP_IP_ADDRESS/api/ready', VERIFY)
+        self.assertIn("caddy-root.crt", VERIFY)
+
+    def test_update_and_rollback_preserve_release_boundaries(self):
+        self.assertIn("merge --ff-only", UPDATE)
+        self.assertIn("status --porcelain", UPDATE)
+        self.assertIn("native Ubuntu deployment", UPDATE)
+        self.assertIn('"$install_root"/releases/*', ROLLBACK)
+        self.assertIn('mv -Tf -- "$temporary_link" "$install_root/current"', ROLLBACK)
+        self.assertIn("previous-release", ROLLBACK)
 
 
 if __name__ == "__main__":

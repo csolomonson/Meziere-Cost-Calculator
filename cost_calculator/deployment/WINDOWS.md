@@ -139,8 +139,5 @@ and secrets:
 .\deployment\windows\Uninstall-Native.ps1
 ```
 
-## Docker alternative
-
-`Dockerfile`, `compose.yaml`, and the Linux deployment files remain supported for
-environments that already operate Linux containers. They are not used by the
-native Windows service.
+The supported production replacement is the native Ubuntu VM deployment in
+[`UBUNTU.md`](UBUNTU.md). The application no longer ships a container deployment.

@@ -23,7 +23,7 @@ flowchart LR
 The main boundaries are:
 
 - `api.py` is the deployment compatibility entry point. `api:app` must remain
-  importable by Uvicorn, containers, and existing service definitions.
+  importable by Uvicorn and existing service definitions.
 - `web/` owns HTTP concerns: application construction, authentication dependencies,
   request/response schemas, serialization, route handlers, and request-level
   orchestration.

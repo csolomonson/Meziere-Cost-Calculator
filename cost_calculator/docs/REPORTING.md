@@ -88,5 +88,5 @@ The production smoke test is:
 ## Retired implementation
 
 The earlier Crystal renderer source remains in the working tree only as historical
-material while pre-migration work is reconciled. It is not imported and is excluded
-from the Linux image by `.dockerignore`. No `CRYSTAL_*` settings are used.
+material while pre-migration work is reconciled. It is not imported or copied into
+the native Ubuntu release. No `CRYSTAL_*` settings are used.

@@ -77,12 +77,9 @@
     <Compile Include="tools\hash_password.py" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include=".dockerignore" />
     <Content Include=".env.example" />
     <Content Include=".gitattributes" />
     <Content Include=".gitignore" />
-    <Content Include="compose.yaml" />
-    <Content Include="Dockerfile" />
     <Content Include="notes.txt" />
     <Content Include="package.json" />
     <Content Include="pnpm-lock.yaml" />
@@ -98,9 +95,13 @@
     <Content Include="deployment\DEPLOYMENT.md" />
     <Content Include="deployment\UBUNTU.md" />
     <Content Include="deployment\WINDOWS.md" />
-    <Content Include="deployment\start-app.sh" />
+    <Content Include="deployment\ubuntu\caddy-override.conf" />
+    <Content Include="deployment\ubuntu\configure.sh" />
+    <Content Include="deployment\ubuntu\cost-calculator.service" />
+    <Content Include="deployment\ubuntu\install-sql-ca.sh" />
     <Content Include="deployment\ubuntu\install.sh" />
     <Content Include="deployment\ubuntu\rollback.sh" />
+    <Content Include="deployment\ubuntu\update.sh" />
     <Content Include="deployment\ubuntu\verify.sh" />
     <Content Include="deployment\windows\CostCalculator.Api.xml" />
     <Content Include="deployment\windows\iis-web.config" />

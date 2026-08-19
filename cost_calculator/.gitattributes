@@ -9,6 +9,8 @@
 *.mjs text eol=lf
 *.py text eol=lf
 *.rpt binary
+*.conf text eol=lf
+*.service text eol=lf
 *.sh text eol=lf
 *.sql text eol=lf
 *.yaml text eol=lf

@@ -1,0 +1,110 @@
+name: Publish native VM release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: vm-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Test and publish Ubuntu VM bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v6
+
+      - name: Validate the release tag
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: cost_calculator/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc
+          python -m pip install -r cost_calculator/requirements.txt
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: cost_calculator/pnpm-lock.yaml
+
+      - name: Test backend and deployment contract
+        run: python -m unittest discover -s cost_calculator/tests -v
+
+      - name: Test and build frontend
+        working-directory: cost_calculator
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm run build
+          test -s static/dist/app.js
+
+      - name: Build native VM release archive
+        id: bundle
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          asset="cost-calculator-${RELEASE_TAG}-ubuntu-vm.tar.gz"
+          printf 'APP_VERSION=%q\n' "$RELEASE_TAG" > cost_calculator/deployment/release.env
+          printf 'APP_REPOSITORY=%q\n' "https://github.com/$GITHUB_REPOSITORY" >> cost_calculator/deployment/release.env
+          tar \
+            --exclude='./cost_env' \
+            --exclude='./node_modules' \
+            --exclude='./.pnpm-store' \
+            --exclude='./secrets/*' \
+            --exclude='./output' \
+            --exclude='*/__pycache__' \
+            --exclude='*.pyc' \
+            -czf "$GITHUB_WORKSPACE/$asset" \
+            -C cost_calculator .
+          (cd "$GITHUB_WORKSPACE" && sha256sum "$asset" > "$asset.sha256")
+          printf 'asset=%s\n' "$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Attest the release archive
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ steps.bundle.outputs.asset }}
+
+      - name: Create the GitHub release
+        env:
+          ASSET_NAME: ${{ steps.bundle.outputs.asset }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ASSET_NAME" "$ASSET_NAME.sha256" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ASSET_NAME" "$ASSET_NAME.sha256" \
+              --verify-tag \
+              --generate-notes \
+              --title "$RELEASE_TAG"

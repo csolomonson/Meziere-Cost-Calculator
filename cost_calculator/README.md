@@ -23,7 +23,7 @@ secrets, and update-supervisor design, see
 | `tests/`, `frontend/tests/` | Backend contracts and pure frontend-domain tests |
 | `database/` | Destructive schema reset and ordered, data-preserving migrations |
 | `reporting/` | Cross-platform ReportLab PDF documents for saved costing runs |
-| `deployment/`, `secrets/` | Production runtime and secret-file documentation |
+| `deployment/`, `secrets/` | Native VM runtime and secret-file documentation |
 
 ## Local setup
 
@@ -56,7 +56,8 @@ For an authenticated direct launch, the application reads
 `secrets/app_users.json` and `secrets/db_password.txt` by default. Explicit
 environment variables and `*_FILE` settings take precedence. Restart the server
 after changing a secret file. Direct Windows launches default to the locally
-installed `ODBC Driver 17 for SQL Server`; the container explicitly uses Driver 18.
+installed `ODBC Driver 17 for SQL Server`; the native Ubuntu service uses Driver
+18.
 
 The command-line entry point uses the same costing domain:
 
@@ -110,26 +111,22 @@ numbered files in `database/migrations/` in order.
 
 ## Production
 
-Tagged releases publish one multi-platform image to GitHub Container Registry.
-The image contains the application, its built frontend, Caddy, and the interactive
-configuration command. The supported host is Ubuntu Server 22.04.5 on amd64 or
-arm64; it needs only Docker Engine and the published image.
+Production runs directly on an Ubuntu Server 24.04 LTS VM. The installer creates a
+versioned Python environment under `/opt/cost-calculator`, runs Uvicorn as a
+restricted systemd service on loopback, and installs Caddy as the HTTPS service on
+port 443. Docker and Compose are not used.
 
-Configuration is kept in a named Docker volume and survives container replacement:
+From a reviewed checkout or extracted tagged release:
 
 ```bash
-IMAGE=ghcr.io/OWNER/REPOSITORY:v1.2.3
-sudo docker volume create cost-calculator-data
-sudo docker pull "$IMAGE"
-sudo docker run --rm -it \
-  --mount source=cost-calculator-data,target=/var/lib/cost-calculator \
-  "$IMAGE" configure
+sudo bash deployment/ubuntu/install.sh
 ```
 
-The same image starts both Caddy and Uvicorn. Caddy terminates HTTPS on container
-port 8443, which is normally published as host port 443. Startup validates the
-persistent configuration and runs the database/PDF preflight before either service
-is made available.
+Configuration is stored under `/etc/cost-calculator`; SQL credentials, application
+users, generated DBA SQL, and update state persist under
+`/var/lib/cost-calculator`. Caddy keeps its separate CA state under
+`/var/lib/caddy/data`. A candidate release must pass the database, schema, user,
+and PDF preflight before the active-release symlink changes.
 
 See [`deployment/DEPLOYMENT.md`](deployment/DEPLOYMENT.md) for publishing and
 architecture, [`deployment/UBUNTU.md`](deployment/UBUNTU.md) for the exact
@@ -137,6 +134,5 @@ Ubuntu install/update/rollback procedure, and
 [`docs/REPORTING.md`](docs/REPORTING.md) for the ReportLab PDF design.
 
 The application is available through Caddy on HTTPS port 443 by hostname or VM
-IPv4 address. Export Caddy's local root certificate with the image's `export-ca`
-command and install it on client devices. The container has no Docker socket or
-GitHub credential; an operator pulls and starts each reviewed release image.
+IPv4 address. The verifier exports Caddy's public local root certificate to
+`/var/lib/cost-calculator/caddy-root.crt` for managed client distribution.

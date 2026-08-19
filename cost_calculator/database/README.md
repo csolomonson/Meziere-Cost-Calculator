@@ -13,15 +13,13 @@ dedicated schema prevents collisions and permits schema-scoped write permissions
 
 ## Deployment-selected storage
 
-On a new Ubuntu installation, the release image's interactive `configure` command
-asks which layout to use and stores `COST_APP_STORAGE_MODE`,
-`COST_APP_DATABASE`, and `COST_APP_SCHEMA` in its named volume. Export its
-generated SQL with the same release image:
+On a new Ubuntu VM, the native installer's interactive configuration asks which
+layout to use and stores `COST_APP_STORAGE_MODE`, `COST_APP_DATABASE`, and
+`COST_APP_SCHEMA` in `/etc/cost-calculator/runtime.env`. It renders the selected
+setup here:
 
 ```bash
-sudo docker run --rm \
-  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
-  "$IMAGE" database-setup > reset-selected-storage.sql
+sudo less /var/lib/cost-calculator/database/reset-selected-storage.sql
 ```
 
 The generated script is destructive. A database administrator must review it and
@@ -32,24 +30,23 @@ current tables, maps the configured SQL login if needed, and grants it DML right
 only on the app schema. Grant the runtime login read access to the required ERP
 objects separately.
 
-After the administrator runs the generated script, run the image preflight. It
-verifies the selected database and schema before the application starts:
+After the administrator runs the generated script, rerun the native installer. Its
+preflight verifies the selected database and schema before activation:
 
 ```bash
-sudo docker run --rm \
-  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
-  "$IMAGE" preflight
+sudo bash /opt/cost-calculator/current/deployment/ubuntu/verify.sh
 ```
 
-Run `configure` again to replace a selection on an existing rehearsal deployment.
-This does not migrate existing data. Run the newly generated DBA script only when
-the selected target is new or its costing data is intentionally disposable.
+Run `configure.sh --reconfigure` to replace a selection on an existing rehearsal
+deployment. This does not migrate existing data. Run the newly generated DBA
+script only when the selected target is new or its costing data is intentionally
+disposable.
 
 ## New or disposable database
 
 For a deployment-selected target, use the generated script described above. The
 checked-in [`reset_schema.sql`](reset_schema.sql) remains the canonical
-`M2_ME.dbo` source from which the image renders the selected database and
+`M2_ME.dbo` source from which the installer renders the selected database and
 schema, and creates the current tables and initial default rows.
 
 > **Warning:** `reset_schema.sql` is destructive. It drops the existing costing tables, their data, and the legacy `DefaultCosts` table before recreating the current schema. Back up any data that must be retained before running it.

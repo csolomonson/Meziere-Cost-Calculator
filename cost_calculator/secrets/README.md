@@ -19,7 +19,8 @@ Generate a hash with `python tools/hash_password.py` from the project environmen
 
 Administrators can manage this directory from the **User management** button on the home screen. New and replacement passwords must be at least eight characters. The last administrator cannot be deleted or removed from the `administrators` group.
 
-Production containers do not bind-mount this directory. Running the image's
-`configure` command stores the SQL password and user database with owner-only
-permissions in the `cost-calculator-data` Docker volume. The application and Caddy
-state both persist there when the image is upgraded or rolled back.
+Production does not read this source directory. The native VM installer stores the
+SQL password under `/var/lib/cost-calculator/secrets` and the writable user
+directory under `/var/lib/cost-calculator/users`, with service-specific
+permissions. Both persist when an application release is upgraded or rolled back.
+Caddy's separate state is owned by its own Unix account.

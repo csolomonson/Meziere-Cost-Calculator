@@ -11,8 +11,8 @@ APP_DATABASE = setting("COST_APP_DATABASE", "M2_ME")
 UID = setting("COST_DB_USERNAME", "cost_app_access")
 PWD = secret_setting("COST_DB_PASSWORD", "db_password.txt", "")
 ODBC_DRIVER = setting("COST_DB_DRIVER", "ODBC Driver 17 for SQL Server")
-# The existing local SQL instance uses its own certificate. Containers override
-# this to false by default so production must establish certificate trust.
+# The existing local SQL instance uses its own certificate. The native VM
+# deployment overrides this to false so production must establish trust.
 TRUST_SERVER_CERTIFICATE = boolean_setting("COST_DB_TRUST_SERVER_CERTIFICATE", True)
 try:
     CONNECTION_TIMEOUT = min(

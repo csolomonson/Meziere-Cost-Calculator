@@ -1,8 +1,7 @@
 {
   auto_https disable_redirects
-  https_port 8443
-  default_sni {$APP_IP_ADDRESS}
-  servers :8443 {
+  default_sni {$APP_HOSTNAME}
+  servers :443 {
     protocols h1 h2
   }
 }

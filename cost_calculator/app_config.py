@@ -1,4 +1,4 @@
-"""Runtime settings with Docker/Kubernetes-style secret-file support."""
+"""Runtime settings with environment and secret-file support."""
 
 import os
 from pathlib import Path
@@ -29,7 +29,7 @@ def boolean_setting(name: str, default: bool) -> bool:
 def secret_setting(name: str, local_filename: str, default: str | None = None) -> str | None:
     """Read configured secret first, then the ignored local secrets directory.
 
-    The local fallback makes a direct development launch behave like Compose.
+    The local fallback keeps direct development launches convenient.
     Production should continue to provide ``NAME_FILE`` explicitly.
     """
     value = setting(name)
