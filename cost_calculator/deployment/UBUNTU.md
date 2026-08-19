@@ -1,173 +1,141 @@
-# Ubuntu 22.04.5 container deployment
+# Ubuntu 22.04.5 single-image installation
 
-This runbook installs a published GitHub Release on Ubuntu Server 22.04.5. The
-release image supports both amd64 and arm64. Use at least 2 vCPU, 4 GB RAM, and
-30 GB of disk, with a static IPv4 address and stable DNS name.
+The server needs Docker Engine, outbound HTTPS access to GHCR, a fixed IPv4
+address, inbound TCP 443, and network access to SQL Server's fixed TCP port. The
+application supports amd64 and arm64.
 
-## Network and database prerequisites
+## 1. Select the release image
 
-Allow the following traffic:
-
-| Direction | Port | Scope | Purpose |
-| --- | ---: | --- | --- |
-| Inbound | TCP 22 | administration network only | SSH management |
-| Inbound | TCP 443 | approved client networks | application HTTPS |
-| Outbound | TCP 1433 or selected fixed port | SQL Server only | ERP and costing data |
-| Outbound | TCP 443 | Docker, GitHub, GHCR | first install and updates |
-| Outbound | UDP/TCP 53 | organization DNS | name resolution |
-| Outbound | UDP 123 | organization NTP | time synchronization |
-
-Docker-published ports may bypass some host firewall rules. Enforce the inbound
-allowlist at the hypervisor, cloud security group, or upstream firewall too.
-
-Configure SQL Server with a fixed `host,port` endpoint. Linux containers should
-not use a Windows named instance such as `host\\instance`. The runtime SQL login
-needs read access to required ERP objects and read/write access to the selected
-costing schema. Use a separate privileged DBA account for schema setup.
-
-## Download and verify the release
-
-Set the version and download both release assets:
+Use the version published on the GitHub Release page:
 
 ```bash
-RELEASE_VERSION=v1.2.3
-RELEASE_BASE="https://github.com/csolomonson/Meziere-Cost-Calculator/releases/download/$RELEASE_VERSION"
-curl --fail --location --remote-name \
-  "$RELEASE_BASE/cost-calculator-$RELEASE_VERSION-linux.tar.gz"
-curl --fail --location --remote-name \
-  "$RELEASE_BASE/cost-calculator-$RELEASE_VERSION-linux.tar.gz.sha256"
-sha256sum --check "cost-calculator-$RELEASE_VERSION-linux.tar.gz.sha256"
+IMAGE="ghcr.io/csolomonson/meziere-cost-calculator:v1.2.3"
 ```
 
-Install the bundle into a fixed directory. Reusing this path on upgrades retains
-the ignored `.env`, secrets, and runtime artifacts:
+For a private GHCR package, log in with a classic token containing only
+`read:packages`:
 
 ```bash
-sudo install -d -m 0755 /opt/cost-calculator
-sudo tar -xzf "cost-calculator-$RELEASE_VERSION-linux.tar.gz" \
-  --strip-components=1 -C /opt/cost-calculator
-cd /opt/cost-calculator
-```
-
-The archive contains no application source and no credentials. Its
-`deployment/release.env` selects the release image by GHCR tag and SHA-256 digest.
-
-If the GHCR package is private, authenticate before startup with a token having
-only `read:packages` access:
-
-```bash
+read -rsp "GHCR read token: " GHCR_READ_TOKEN
+printf '\n'
 printf '%s' "$GHCR_READ_TOKEN" | sudo docker login ghcr.io \
-  --username YOUR_GITHUB_USER --password-stdin
+  --username YOUR_GITHUB_USERNAME --password-stdin
 unset GHCR_READ_TOKEN
 ```
 
-## Optional SQL Server certificate authority
+## 2. Configure the retained state
 
-Production should validate the SQL Server certificate. If it uses an internal CA,
-copy only the PEM-encoded public root and intermediate certificates before
-startup:
-
-```bash
-sudo install -m 0644 company-sql-root.crt \
-  /opt/cost-calculator/deployment/sql-ca/company-sql-root.crt
-```
-
-Never copy a SQL private key. Startup combines these public certificates with the
-Ubuntu CA bundle and mounts the result read-only into the application container.
-
-## Configure and start
-
-Run one command:
+The volume is created automatically by the first command. Configuration is
+interactive and remains available when the container is replaced:
 
 ```bash
-cd /opt/cost-calculator
-sudo bash deployment/ubuntu/start.sh
+sudo docker run --rm -it \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$IMAGE" configure
 ```
 
-On the first run, the startup configuration prompts for:
+The command asks for the server hostname and IPv4 address, SQL endpoint and login,
+database/schema selection, SQL password, report company, and initial application
+administrator. It also runs the database and PDF preflight.
 
-- application DNS hostname and VM IPv4 address;
-- SQL Server `host,port`, login, ERP database, and costing storage layout;
-- whether SQL certificate identity validation is temporarily bypassed;
-- the SQL password; and
-- the initial application administrator username and password.
-
-The script installs Docker Engine and Compose from Docker's official Ubuntu
-repository if needed. It then pulls the digest-pinned application and Caddy
-images, writes protected host configuration, and runs the deployment preflight in
-a one-off application container. No compiler or application build tool is
-installed on the server.
-
-For a new database or disposable schema, the first preflight can stop because the
-tables do not exist. Have a DBA review and run:
-
-```text
-/opt/cost-calculator/deployment/runtime/reset-selected-storage.sql
-```
-
-That generated script is destructive within the selected app schema. The runtime
-login never executes it. After the DBA completes setup, rerun `start.sh`.
-
-Successful startup prints the hostname and IPv4 URLs and exports Caddy's public
-root certificate to:
-
-```text
-/opt/cost-calculator/deployment/runtime/caddy-root.crt
-```
-
-Distribute that public certificate through managed client configuration (for
-example Group Policy or endpoint management). Do not distribute Caddy private
-keys or Docker volume contents.
-
-## Verify
-
-Run the full automated verifier after installation and after every update:
+If SQL Server uses a private CA, install its PEM-encoded public root/intermediate
+bundle, then rerun `configure` or `preflight`:
 
 ```bash
-sudo bash deployment/ubuntu/verify.sh
+sudo docker run --rm -i \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$IMAGE" install-ca < company-sql-ca.crt
 ```
 
-It checks the container state, SQL credentials, required schema, PDF runtime,
-process health, database-aware readiness, and HTTPS at both configured addresses.
+Never provide a SQL Server private key.
 
-Also complete a browser smoke test: reject an invalid login, sign in as the
-administrator, calculate and save a representative cost, reopen it, and open both
-PDF reports.
-
-## Upgrade
-
-Download and checksum the new assets exactly as above. Extract the new bundle over
-`/opt/cost-calculator`, then run:
+For new or disposable costing storage, export the generated DBA script:
 
 ```bash
-cd /opt/cost-calculator
-sudo bash deployment/ubuntu/update.sh
-sudo bash deployment/ubuntu/verify.sh
+sudo docker run --rm \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$IMAGE" database-setup > reset-selected-storage.sql
 ```
 
-The release metadata updates `.env` to the new digest. Startup preflight completes
-before the running containers are replaced. The fixed Compose project name keeps
-the application-user and Caddy volumes attached across versions.
-
-## Rollback and operations
-
-Rollback to the previously recorded application image without changing data:
+Have a DBA review and run it once, then confirm preflight:
 
 ```bash
-sudo bash deployment/ubuntu/rollback.sh
-sudo bash deployment/ubuntu/verify.sh
+sudo docker run --rm \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$IMAGE" preflight
 ```
 
-Useful diagnostics:
+## 3. Start the single container
 
 ```bash
-sudo docker compose ps
-sudo docker compose logs --tail=200 app proxy
-APP_CONTAINER="$(sudo docker compose ps -q app)"
-sudo docker inspect --format '{{.Config.Image}} {{.State.Health.Status}}' "$APP_CONTAINER"
+sudo docker run -d \
+  --name cost-calculator \
+  --restart unless-stopped \
+  --init \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --log-driver local \
+  --log-opt max-size=10m \
+  --log-opt max-file=5 \
+  --publish 443:8443 \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$IMAGE"
 ```
 
-Restarting the VM is safe: Docker is enabled at boot and both services use
-`restart: unless-stopped`. Back up the application-user and Caddy data volumes as
-part of VM protection, and keep SQL data under the organization's SQL Server
-backup policy.
+The default command runs preflight and then starts Uvicorn plus Caddy. Docker's
+health status is database-aware:
+
+```bash
+sudo docker ps
+sudo docker inspect --format '{{.State.Health.Status}}' cost-calculator
+sudo docker logs --tail=200 cost-calculator
+```
+
+Export Caddy's public root certificate after the first successful start:
+
+```bash
+sudo docker run --rm \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$IMAGE" export-ca > caddy-root.crt
+```
+
+Distribute only that public certificate through managed client configuration.
+
+## Update
+
+Pull and preflight the new version before replacing the container:
+
+```bash
+NEW_IMAGE="ghcr.io/csolomonson/meziere-cost-calculator:v1.2.4"
+sudo docker pull "$NEW_IMAGE"
+sudo docker run --rm \
+  --mount type=volume,src=cost-calculator-data,dst=/var/lib/cost-calculator \
+  "$NEW_IMAGE" preflight
+```
+
+Record the current image, then recreate the container with the same `docker run`
+options shown above and `$NEW_IMAGE`:
+
+```bash
+sudo docker inspect --format '{{.Config.Image}}' cost-calculator
+sudo docker stop cost-calculator
+sudo docker rename cost-calculator cost-calculator-rollback
+```
+
+After the replacement passes health and browser checks, remove the stopped backup:
+
+```bash
+sudo docker rm cost-calculator-rollback
+```
+
+To roll back before removing it, stop and remove the replacement, rename the old
+container to `cost-calculator`, and start it. The named volume and SQL databases
+are not rolled back.
+
+## Backup
+
+Protect SQL data using the organization's SQL Server backup system. Back up the
+`cost-calculator-data` Docker volume because it contains application users,
+configuration, and Caddy's CA. Treat the backup as secret material.

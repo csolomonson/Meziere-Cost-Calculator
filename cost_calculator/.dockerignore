@@ -11,7 +11,6 @@ __pycache__
 .pytest_cache
 secrets
 deployment/runtime
-deployment/release.env
 deployment/sql-ca/*.crt
 output
 out*.csv

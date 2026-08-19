@@ -1,26 +1,32 @@
 #!/bin/sh
 set -eu
 
-users_file="${COST_APP_USERS_JSON_FILE:-/var/lib/cost-app-users/app_users.json}"
-users_seed="${COST_APP_USERS_SEED_FILE:-/run/secrets/app_users_seed}"
-db_password_file="${COST_DB_PASSWORD_FILE:-/run/secrets/db_password}"
+state_root="${COST_APP_STATE_ROOT:-/var/lib/cost-calculator}"
+config_file="$state_root/config/runtime.env"
+users_file="${COST_APP_USERS_JSON_FILE:-$state_root/users/app_users.json}"
+db_password_file="${COST_DB_PASSWORD_FILE:-$state_root/secrets/db_password.txt}"
+ca_bundle="${SSL_CERT_FILE:-$state_root/ca/ca-certificates.crt}"
+base_ca_bundle="/usr/local/share/cost-calculator/ca-certificates.crt"
+extra_ca="$state_root/ca/extra-ca.crt"
 
-if [ ! -r "$db_password_file" ] || [ ! -s "$db_password_file" ]; then
-  printf 'The SQL password secret is missing or unreadable: %s\n' "$db_password_file" >&2
+if [ ! -r "$base_ca_bundle" ] || [ ! -s "$base_ca_bundle" ]; then
+  printf 'The image CA certificate bundle is missing: %s\n' "$base_ca_bundle" >&2
   exit 1
 fi
 
-if [ ! -s "$users_file" ]; then
-  if [ ! -r "$users_seed" ] || [ ! -s "$users_seed" ]; then
-    printf 'The application-user seed is missing or unreadable: %s\n' "$users_seed" >&2
+temporary_ca="$(mktemp "$state_root/ca/ca-certificates.XXXXXX")"
+cp "$base_ca_bundle" "$temporary_ca"
+if [ -s "$extra_ca" ]; then
+  printf '\n' >> "$temporary_ca"
+  cat "$extra_ca" >> "$temporary_ca"
+fi
+chmod 0600 "$temporary_ca"
+mv -f "$temporary_ca" "$ca_bundle"
+
+for required_file in "$config_file" "$users_file" "$db_password_file" "$ca_bundle"; do
+  if [ ! -r "$required_file" ] || [ ! -s "$required_file" ]; then
+    printf 'Required runtime state is missing or unreadable: %s\n' "$required_file" >&2
+    printf 'Run this image with the configure command before starting it.\n' >&2
     exit 1
   fi
-  mkdir -p "$(dirname "$users_file")"
-  cp "$users_seed" "$users_file"
-  chmod 600 "$users_file"
-fi
-
-if [ ! -r "$users_file" ] || [ ! -s "$users_file" ]; then
-  printf 'The persisted application-user file is missing or unreadable: %s\n' "$users_file" >&2
-  exit 1
-fi
+done

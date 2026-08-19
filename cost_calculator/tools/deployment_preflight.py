@@ -1,4 +1,4 @@
-"""Fail-fast production checks used before changing the running containers."""
+"""Fail-fast production checks used before starting the application container."""
 
 from __future__ import annotations
 
@@ -27,14 +27,17 @@ REQUIRED_TABLES = (
 def check_user_seed() -> None:
     seed_path = Path("/run/secrets/app_users_seed")
     deployed_path = Path(
-        os.getenv("COST_APP_USERS_JSON_FILE", "/var/lib/cost-app-users/app_users.json")
+        os.getenv(
+            "COST_APP_USERS_JSON_FILE",
+            "/var/lib/cost-calculator/users/app_users.json",
+        )
     )
     users_path = deployed_path if deployed_path.is_file() else seed_path
     users = json.loads(users_path.read_text(encoding="utf-8"))
     if not isinstance(users, dict) or not users:
-        raise RuntimeError("The application user seed must contain at least one user")
+        raise RuntimeError("The application user file must contain at least one user")
     if not any("administrators" in record.get("groups", []) for record in users.values() if isinstance(record, dict)):
-        raise RuntimeError("The application user seed must contain an administrator")
+        raise RuntimeError("The application user file must contain an administrator")
 
 
 def check_erp_database() -> None:

@@ -110,25 +110,26 @@ numbered files in `database/migrations/` in order.
 
 ## Production
 
-Tagged releases publish a multi-platform image to GitHub Container Registry and a
-source-free Ubuntu deployment bundle to GitHub Releases. The supported host is
-Ubuntu Server 22.04.5 on amd64 or arm64. The server pulls an image pinned by both
-tag and digest; it never builds the frontend or Python runtime.
+Tagged releases publish one multi-platform image to GitHub Container Registry.
+The image contains the application, its built frontend, Caddy, and the interactive
+configuration command. The supported host is Ubuntu Server 22.04.5 on amd64 or
+arm64; it needs only Docker Engine and the published image.
 
-After downloading and verifying a release bundle, deploy with:
+Configuration is kept in a named Docker volume and survives container replacement:
 
 ```bash
-sudo bash deployment/ubuntu/start.sh
+IMAGE=ghcr.io/OWNER/REPOSITORY:v1.2.3
+sudo docker volume create cost-calculator-data
+sudo docker pull "$IMAGE"
+sudo docker run --rm -it \
+  --mount source=cost-calculator-data,target=/var/lib/cost-calculator \
+  "$IMAGE" configure
 ```
 
-Startup runs the idempotent configuration script, which installs Docker when
-needed, prompts for missing environment and secret values, renders the DBA setup
-script, pulls the release images, creates the initial administrator, and runs the
-database/PDF preflight before replacing the containers. `install.sh` remains a
-compatibility alias.
-
-The application container also runs `deployment/configure-container.sh` before
-Uvicorn, validating its mounted secrets and initializing persistent user state.
+The same image starts both Caddy and Uvicorn. Caddy terminates HTTPS on container
+port 8443, which is normally published as host port 443. Startup validates the
+persistent configuration and runs the database/PDF preflight before either service
+is made available.
 
 See [`deployment/DEPLOYMENT.md`](deployment/DEPLOYMENT.md) for publishing and
 architecture, [`deployment/UBUNTU.md`](deployment/UBUNTU.md) for the exact
@@ -136,7 +137,6 @@ Ubuntu install/update/rollback procedure, and
 [`docs/REPORTING.md`](docs/REPORTING.md) for the ReportLab PDF design.
 
 The application is available through Caddy on HTTPS port 443 by hostname or VM
-IPv4 address. Clients must trust the exported
-`deployment/runtime/caddy-root.crt`. Administrators can request an update through
-the UI, but the application has no Docker socket or GitHub credential; an operator
-deploys the reviewed release bundle from the host.
+IPv4 address. Export Caddy's local root certificate with the image's `export-ca`
+command and install it on client devices. The container has no Docker socket or
+GitHub credential; an operator pulls and starts each reviewed release image.

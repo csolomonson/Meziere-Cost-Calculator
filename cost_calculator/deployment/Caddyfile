@@ -1,12 +1,16 @@
 {
   auto_https disable_redirects
+  https_port 8443
   default_sni {$APP_IP_ADDRESS}
+  servers :8443 {
+    protocols h1 h2
+  }
 }
 
-{$APP_HOSTNAME}:443, {$APP_IP_ADDRESS}:443 {
+https://{$APP_HOSTNAME}, https://{$APP_IP_ADDRESS} {
   tls internal
   encode zstd gzip
-  reverse_proxy app:8000
+  reverse_proxy 127.0.0.1:8000
   header {
     Strict-Transport-Security "max-age=31536000"
     -Server

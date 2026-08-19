@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish GHCR image and release bundle
+    name: Publish GHCR image and GitHub release
     runs-on: ubuntu-latest
     steps:
       - name: Check out the release tag
@@ -37,7 +37,7 @@ jobs:
           }
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
-          printf 'asset=cost-calculator-%s-linux.tar.gz\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          printf 'asset=cost-calculator-%s-image.txt\n' "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
@@ -79,39 +79,16 @@ jobs:
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
 
-      - name: Assemble the source-free Ubuntu deployment bundle
+      - name: Record the immutable container reference
         env:
           APP_IMAGE: ${{ steps.release.outputs.image }}
           APP_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           ASSET_NAME: ${{ steps.release.outputs.asset }}
           RELEASE_TAG: ${{ github.ref_name }}
-          SOURCE_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          app_dir="$GITHUB_WORKSPACE/cost_calculator"
-          bundle_name="cost-calculator-$RELEASE_TAG"
-          bundle_dir="$RUNNER_TEMP/$bundle_name"
-
-          install -D -m 0644 "$app_dir/compose.yaml" "$bundle_dir/compose.yaml"
-          install -D -m 0644 "$app_dir/.env.example" "$bundle_dir/.env.example"
-          install -D -m 0644 "$app_dir/deployment/UBUNTU.md" "$bundle_dir/README.md"
-          install -D -m 0644 "$app_dir/database/reset_schema.sql" "$bundle_dir/database/reset_schema.sql"
-          install -D -m 0644 "$app_dir/deployment/Caddyfile" "$bundle_dir/deployment/Caddyfile"
-          install -D -m 0644 "$app_dir/deployment/DEPLOYMENT.md" "$bundle_dir/deployment/DEPLOYMENT.md"
-          install -D -m 0644 "$app_dir/deployment/UBUNTU.md" "$bundle_dir/deployment/UBUNTU.md"
-          install -D -m 0644 "$app_dir/deployment/sql-ca/README.md" "$bundle_dir/deployment/sql-ca/README.md"
-          install -D -m 0644 "$app_dir/secrets/README.md" "$bundle_dir/secrets/README.md"
-          for script in "$app_dir"/deployment/ubuntu/*.sh; do
-            install -D -m 0755 "$script" "$bundle_dir/deployment/ubuntu/$(basename "$script")"
-          done
-
-          printf 'APP_VERSION=%s\n' "$RELEASE_TAG" > "$bundle_dir/deployment/release.env"
-          printf 'COST_APP_IMAGE=%s:%s@%s\n' "$APP_IMAGE" "$RELEASE_TAG" "$APP_IMAGE_DIGEST" >> "$bundle_dir/deployment/release.env"
-          printf 'APP_REPOSITORY=https://github.com/%s\n' "$SOURCE_REPOSITORY" >> "$bundle_dir/deployment/release.env"
-          chmod 0644 "$bundle_dir/deployment/release.env"
-
-          tar -C "$RUNNER_TEMP" -czf "$GITHUB_WORKSPACE/$ASSET_NAME" "$bundle_name"
+          printf '%s:%s@%s\n' "$APP_IMAGE" "$RELEASE_TAG" "$APP_IMAGE_DIGEST" > "$GITHUB_WORKSPACE/$ASSET_NAME"
           (cd "$GITHUB_WORKSPACE" && sha256sum "$ASSET_NAME" > "$ASSET_NAME.sha256")
 
       - name: Create the GitHub release

@@ -2,92 +2,26 @@ name: cost-calculator
 
 services:
   app:
-    image: ${COST_APP_IMAGE:?COST_APP_IMAGE must be set by deployment/release.env}
+    image: ${COST_APP_IMAGE:?Set COST_APP_IMAGE to a released GHCR tag and digest}
     restart: unless-stopped
     init: true
-    logging:
-      driver: local
-      options:
-        max-size: 10m
-        max-file: "5"
-    environment:
-      COST_APP_USERS_JSON_FILE: /var/lib/cost-app-users/app_users.json
-      COST_APP_USERS_SEED_FILE: /run/secrets/app_users_seed
-      COST_DB_PASSWORD_FILE: /run/secrets/db_password
-      COST_DB_SERVER: ${COST_DB_SERVER:-sqlserver.example.internal,1433}
-      COST_DB_USERNAME: ${COST_DB_USERNAME:-cost_app_access}
-      COST_DB_DRIVER: ${COST_DB_DRIVER:-ODBC Driver 18 for SQL Server}
-      COST_ERP_DATABASE: ${COST_ERP_DATABASE:-M1_ME}
-      COST_APP_STORAGE_MODE: ${COST_APP_STORAGE_MODE:-database}
-      COST_APP_DATABASE: ${COST_APP_DATABASE:-M2_ME}
-      COST_APP_SCHEMA: ${COST_APP_SCHEMA:-dbo}
-      COST_DB_TRUST_SERVER_CERTIFICATE: ${COST_DB_TRUST_SERVER_CERTIFICATE:-false}
-      COST_DB_CONNECTION_TIMEOUT_SECONDS: ${COST_DB_CONNECTION_TIMEOUT_SECONDS:-5}
-      APP_VERSION: ${APP_VERSION:-development}
-      APP_REPOSITORY: ${APP_REPOSITORY:-}
-      COST_REPORT_COMPANY_NAME: ${COST_REPORT_COMPANY_NAME:-Meziere Enterprises}
-      UPDATE_STATUS_FILE: /var/lib/cost-app/update-status.json
-      UPDATE_REQUEST_FILE: /var/lib/cost-app/update-request.json
-    secrets:
-      - app_users_seed
-      - db_password
-    read_only: true
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp
-    volumes:
-      - ./deployment/runtime/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
-      - update_state:/var/lib/cost-app
-      - user_data:/var/lib/cost-app-users
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=4)"]
-      interval: 15s
-      timeout: 6s
-      retries: 8
-      start_period: 10s
-
-  proxy:
-    image: caddy:2.11.4-alpine
-    restart: unless-stopped
-    init: true
-    logging:
-      driver: local
-      options:
-        max-size: 10m
-        max-file: "5"
-    depends_on:
-      app:
-        condition: service_healthy
-    environment:
-      APP_HOSTNAME: ${APP_HOSTNAME:-localhost}
-      APP_IP_ADDRESS: ${APP_IP_ADDRESS:-127.0.0.1}
     ports:
-      - "443:443"
+      - "443:8443"
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
     read_only: true
     cap_drop:
       - ALL
-    cap_add:
-      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     tmpfs:
       - /tmp
     volumes:
-      - ./deployment/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-
-secrets:
-  app_users_seed:
-    file: ./secrets/app_users.json
-  db_password:
-    file: ./secrets/db_password.txt
+      - app_state:/var/lib/cost-calculator
 
 volumes:
-  caddy_data:
-  caddy_config:
-  update_state:
-  user_data:
+  app_state:
+    name: cost-calculator-data
