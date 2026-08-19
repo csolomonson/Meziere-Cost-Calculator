@@ -14,9 +14,15 @@ docker compose config --quiet
 docker compose ps
 docker compose exec -T app python -m tools.deployment_preflight
 app_hostname="$(sed -n 's/^APP_HOSTNAME=//p' .env | tail -n 1 | tr -d '\r')"
+app_ip_address="$(sed -n 's/^APP_IP_ADDRESS=//p' .env | tail -n 1 | tr -d '\r')"
+ca_certificate="deployment/runtime/caddy-root.crt"
 [[ "$app_hostname" =~ ^[A-Za-z0-9.-]+$ && "$app_hostname" != "localhost" ]]
-curl --fail --silent --show-error --insecure --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/health" >/dev/null
-curl --fail --silent --show-error --insecure --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/ready" >/dev/null
+[[ "$app_ip_address" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+[[ -s "$ca_certificate" ]]
+curl --fail --silent --show-error --cacert "$ca_certificate" --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/health" >/dev/null
+curl --fail --silent --show-error --cacert "$ca_certificate" --resolve "$app_hostname:443:127.0.0.1" "https://$app_hostname/api/ready" >/dev/null
+curl --fail --silent --show-error --cacert "$ca_certificate" "https://$app_ip_address/api/health" >/dev/null
+curl --fail --silent --show-error --cacert "$ca_certificate" "https://$app_ip_address/api/ready" >/dev/null
 
 app_container="$(docker compose ps -q app)"
 proxy_container="$(docker compose ps -q proxy)"

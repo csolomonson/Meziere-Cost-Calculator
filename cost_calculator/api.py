@@ -74,7 +74,11 @@ from web.routers.costs import (
     saved_cost,
     set_current_cost,
 )
-from web.routers.reports import part_cost_report
+from web.routers.reports import (
+    customer_part_cost_report,
+    internal_part_cost_report,
+    part_cost_report,
+)
 from web.routers.settings import save_settings_defaults, settings_defaults
 from web.routers.system import (
     conversion_calculator_calculate,

@@ -23,8 +23,9 @@ const markupBreaks = [
 ];
 
 test("part cost report URLs require a saved positive integer ID", () => {
-  assert.equal(partCostReportUrl(42), "/api/reports/part-cost/42");
-  assert.equal(partCostReportUrl("42"), "/api/reports/part-cost/42");
+  assert.equal(partCostReportUrl(42), "/api/reports/part-cost/42/internal");
+  assert.equal(partCostReportUrl("42", "customer"), "/api/reports/part-cost/42/customer");
+  assert.equal(partCostReportUrl(42, "invalid"), "");
   assert.equal(partCostReportUrl(null), "");
   assert.equal(partCostReportUrl(0), "");
 });

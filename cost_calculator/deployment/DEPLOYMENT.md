@@ -16,7 +16,9 @@ The installer is idempotent and fail-fast. It installs Docker from Docker's
 official Ubuntu repository when needed, creates missing configuration and secrets
 interactively, builds a versioned image once, validates both SQL databases and the
 costing schema, starts the containers, waits for database-aware readiness, verifies
-HTTPS, and exports the Caddy root certificate.
+HTTPS by both hostname and VM IPv4 address, and exports the Caddy root certificate.
+The VM address is detected during a new install and stored as `APP_IP_ADDRESS`.
+Older `.env` files are backfilled automatically on their next installer run.
 
 For a new `.env`, the installer also asks whether app-owned costing tables should
 use a dedicated database or a dedicated schema inside the ERP database. Existing
@@ -77,8 +79,9 @@ changed.
 - App-owned SQL is fully schema-qualified. In ERP-schema mode, the runtime login
   can be granted writes only to the dedicated app schema while retaining limited
   read access to required ERP objects.
-- Caddy issues the site certificate from a deployment-local CA. The installer
-  exports the public root for controlled distribution to clients.
+- Caddy issues certificates for both `APP_HOSTNAME` and `APP_IP_ADDRESS` from a
+  deployment-local CA. The installer exports the public root for controlled
+  distribution to clients.
 - Application users and Caddy state live in named volumes and survive upgrades.
 
 `GET /api/health` is a process liveness check. `GET /api/ready` verifies both the

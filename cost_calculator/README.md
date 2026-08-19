@@ -95,8 +95,8 @@ The API is grouped as follows:
   purchase orders;
 - settings: global/part markup breaks and machine/shift defaults;
 - administration: file-backed user management for the `administrators` group;
-- reporting: authenticated inline PDFs for saved `PartCostID` values under
-  `/api/reports`;
+- reporting: authenticated internal cost-audit and customer-safe PDFs for saved
+  `PartCostID` values under `/api/reports`;
 - system: health, session, version, update contract, and conversion calculator.
 
 When running locally, the authenticated OpenAPI UI is available at `/docs`.
@@ -143,8 +143,11 @@ sudo bash deployment/ubuntu/update.sh
 Pass a branch name, such as `codex`, only when intentionally updating a rehearsal
 server from that branch.
 
-Access the application through HTTPS on port 443. The production image contains the
-complete browser application and does not require internet access while running.
+Access the application through HTTPS on port 443 by either the configured hostname
+or the VM IPv4 address. Both certificates use the same deployment-local Caddy CA,
+so clients must trust the exported `deployment/runtime/caddy-root.crt`. The
+production image contains the complete browser application and does not require
+internet access while running.
 Administrators can manage users and request an update through the UI; actual update
 installation remains isolated in the external supervisor described in the deployment
 guide.

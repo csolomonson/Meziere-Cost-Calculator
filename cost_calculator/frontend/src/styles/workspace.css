@@ -10,7 +10,7 @@
   grid-template-columns: 64px minmax(180px, 1fr) 220px repeat(4, minmax(120px, .45fr)) minmax(180px, auto);
   padding: 10px 14px;
 }
-.topbar.with-return { grid-template-columns: 64px minmax(180px, 1fr) 220px repeat(4, minmax(118px, .4fr)) minmax(390px, auto); }
+.topbar.with-return { grid-template-columns: 64px minmax(180px, 1fr) 220px repeat(4, minmax(118px, .4fr)) minmax(280px, auto); }
 .home-icon { font-size: 13px; min-height: 40px; padding: 0 10px; }
 .save-box { align-items: center; display: grid; gap: 4px; justify-items: end; min-width: 0; }
 .save-box > div { display: flex; gap: 6px; }
@@ -173,6 +173,19 @@
 }
 .review-cost-breakdown > strong { font-size: 12px; text-transform: uppercase; }
 .review-cost-breakdown .chart-track { height: 20px; }
+.review-report-actions {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.review-report-actions strong { font-size: 12px; text-transform: uppercase; }
+.review-report-actions p { color: var(--muted); font-size: 12px; font-weight: 700; margin: 3px 0 0; }
+.review-report-links { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.review-report-links .button { min-height: 34px; padding: 6px 10px; white-space: nowrap; }
 .row-actions { display: flex; justify-content: flex-end; }
 .row-actions button {
   background: #fff;

@@ -80,9 +80,10 @@ sudo bash deployment/ubuntu/verify.sh
 ```
 
 For the first-run prompts, use `cost-calculator.test` as the application hostname,
-`<WINDOWS_HOST_IP>,1433` as the SQL endpoint, and the test SQL login/database
-names. It is acceptable to answer `y` to the SQL certificate bypass prompt only
-for this isolated rehearsal; production should validate the SQL Server certificate.
+accept the detected VM IPv4 address, use `<WINDOWS_HOST_IP>,1433` as the SQL
+endpoint, and enter the test SQL login/database names. It is acceptable to answer
+`y` to the SQL certificate bypass prompt only for this isolated rehearsal;
+production should validate the SQL Server certificate.
 
 After the installer succeeds, print the guest IP and export the Caddy root CA:
 
@@ -91,11 +92,13 @@ hostname -I
 ls -l deployment/runtime/caddy-root.crt
 ```
 
-On Windows, add `<VM_IP> cost-calculator.test` to the hosts file, copy
-`deployment/runtime/caddy-root.crt` from the VM, and import only that known
-rehearsal CA into `Cert:\LocalMachine\Root` from an elevated PowerShell session.
-The application is then available at `https://cost-calculator.test/`. Remove the
-firewall rule, hosts entry, and rehearsal CA when the VM is retired.
+On Windows, copy `deployment/runtime/caddy-root.crt` from the VM and import only
+that known rehearsal CA into `Cert:\LocalMachine\Root` from an elevated PowerShell
+session. The application is immediately available at `https://<VM_IP>/`. To also
+use `https://cost-calculator.test/`, add `<VM_IP> cost-calculator.test` to the
+Windows hosts file (or create the equivalent DNS record). Both URLs use the same
+Caddy CA. Remove the firewall rule, optional hosts entry, and rehearsal CA when the
+VM is retired.
 
 ## Decisions to freeze by August 7
 
@@ -154,12 +157,15 @@ Rehearse on the final VM or an exact clone with the same network rules:
 
 1. Run the installer from a clean checkout and time it.
 2. Confirm both database checks and all seven required costing tables pass.
-3. From a managed client, verify HTTPS is trusted and matches the DNS name.
+3. From a managed client, verify HTTPS is trusted at both the DNS name and VM IP.
 4. Verify a missing or incorrect login returns 401, then sign in as administrator.
 5. Search for a part, calculate a representative cost, save it as current, reopen
    it, and confirm the saved user identity.
-6. Open the PDF and compare its identity, totals, materials, operations, notes, and
-   page numbers with the saved worksheet. Include a multi-page example.
+6. Open both PDFs. Compare the internal report's sources, equations, totals, notes,
+   and reconciliation with the saved worksheet. Confirm the customer report lists
+   the unit and extended charge for every backflushed material and operation without
+   exposing internal rates or margins.
+   Include a multi-page internal example.
 7. Add a temporary user, reset its password, and remove it.
 8. Restart the VM. Confirm Docker starts the application and rerun `verify.sh`.
 9. Exercise `rollback.sh` with two harmless version tags, then redeploy the final
@@ -201,7 +207,8 @@ sudo bash deployment/ubuntu/install.sh
 
 With the VM prepared, this command is non-interactive. It validates configuration,
 SQL credentials, both databases, the schema, and ReportLab; starts the containers;
-waits for readiness; checks HTTPS; and prints the running image. If it exits
+waits for readiness; checks HTTPS at both configured addresses; and prints the
+running image. If it exits
 nonzero, save the printed logs and use the rollback section instead of improvising
 a partial fix.
 
@@ -215,13 +222,15 @@ This must print `All automated deployment checks passed.`
 
 ### 4. Five-minute business smoke test
 
-From a managed client using the production DNS name:
+From a managed client using the production DNS name (and once by VM IP during the
+rehearsal):
 
 1. confirm HTTPS is trusted with no certificate warning;
 2. confirm a bad password is rejected;
 3. sign in and search for a known part;
 4. calculate, save, reopen, and verify one representative costing run; and
-5. select **Open PDF** and compare the unit and total costs.
+5. open **Internal PDF** and **Customer PDF**, compare their unit and total prices,
+   and confirm their internal versus customer disclosure is appropriate.
 
 Record the version from `/api/version`, the tester, and the pass time. The change
 owner can then announce service availability.
@@ -278,6 +287,10 @@ sudo bash deployment/ubuntu/verify.sh
 Future costing data must use the organization's SQL Server backup process. Also
 back up the `user_data` and `caddy_data` Docker volumes before VM replacement; the
 latter preserves the CA already trusted by clients.
+
+If the VM IPv4 address changes, update `APP_IP_ADDRESS` in `.env` and rerun the
+installer. Caddy will issue the replacement IP certificate from its existing CA,
+so clients that already trust that CA do not need to import a new root certificate.
 
 The Docker installation follows the official guidance:
 
