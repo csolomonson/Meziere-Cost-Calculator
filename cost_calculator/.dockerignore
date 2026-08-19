@@ -1,6 +1,7 @@
 .git
 .agents
 .codex
+.env
 cost_env
 node_modules
 .pnpm-store
@@ -9,6 +10,10 @@ __pycache__
 *.pyc
 .pytest_cache
 secrets
+deployment/runtime
+deployment/release.env
+deployment/sql-ca/*.crt
+output
 out*.csv
 notes.txt
 deployment/windows

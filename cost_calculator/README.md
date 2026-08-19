@@ -110,44 +110,33 @@ numbered files in `database/migrations/` in order.
 
 ## Production
 
-The supported production target is an Ubuntu Server 24.04 LTS VM running Docker
-Compose. See [`deployment/UBUNTU.md`](deployment/UBUNTU.md) for the preparation,
-rehearsal, August 17 execution, verification, and rollback runbook. See
+Tagged releases publish a multi-platform image to GitHub Container Registry and a
+source-free Ubuntu deployment bundle to GitHub Releases. The supported host is
+Ubuntu Server 22.04.5 on amd64 or arm64. The server pulls an image pinned by both
+tag and digest; it never builds the frontend or Python runtime.
+
+After downloading and verifying a release bundle, deploy with:
+
+```bash
+sudo bash deployment/ubuntu/start.sh
+```
+
+Startup runs the idempotent configuration script, which installs Docker when
+needed, prompts for missing environment and secret values, renders the DBA setup
+script, pulls the release images, creates the initial administrator, and runs the
+database/PDF preflight before replacing the containers. `install.sh` remains a
+compatibility alias.
+
+The application container also runs `deployment/configure-container.sh` before
+Uvicorn, validating its mounted secrets and initializing persistent user state.
+
+See [`deployment/DEPLOYMENT.md`](deployment/DEPLOYMENT.md) for publishing and
+architecture, [`deployment/UBUNTU.md`](deployment/UBUNTU.md) for the exact
+Ubuntu install/update/rollback procedure, and
 [`docs/REPORTING.md`](docs/REPORTING.md) for the ReportLab PDF design.
 
-For the container deployment, create the two mounted secret files described in
-[`secrets/README.md`](secrets/README.md), configure non-secret database values in
-`.env`, and run:
-
-```bash
-sudo bash deployment/ubuntu/install.sh
-```
-
-On a new installation, the script offers either a dedicated costing database or a
-dedicated costing schema inside the ERP database. It generates the destructive,
-deployment-specific DBA script at
-`deployment/runtime/reset-selected-storage.sql`; have a database administrator
-review and run it, then rerun the installer. The runtime application never
-receives database- or schema-creation privileges.
-
-Use `sudo bash deployment/ubuntu/install.sh --configure-storage` to change the
-selection on an existing disposable rehearsal deployment.
-
-After the initial installation, deploy the latest reviewed `master` commit and
-run all verification checks with:
-
-```bash
-sudo bash deployment/ubuntu/update.sh
-```
-
-Pass a branch name, such as `codex`, only when intentionally updating a rehearsal
-server from that branch.
-
-Access the application through HTTPS on port 443 by either the configured hostname
-or the VM IPv4 address. Both certificates use the same deployment-local Caddy CA,
-so clients must trust the exported `deployment/runtime/caddy-root.crt`. The
-production image contains the complete browser application and does not require
-internet access while running.
-Administrators can manage users and request an update through the UI; actual update
-installation remains isolated in the external supervisor described in the deployment
-guide.
+The application is available through Caddy on HTTPS port 443 by hostname or VM
+IPv4 address. Clients must trust the exported
+`deployment/runtime/caddy-root.crt`. Administrators can request an update through
+the UI, but the application has no Docker socket or GitHub credential; an operator
+deploys the reviewed release bundle from the host.

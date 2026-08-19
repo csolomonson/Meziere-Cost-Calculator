@@ -11,4 +11,5 @@ deployment/windows/CostCalculator.Api.exe
 reporting/CrystalReportRenderer/bin/
 reporting/CrystalReportRenderer/obj/
 deployment/runtime/
+deployment/release.env
 deployment/sql-ca/*.crt

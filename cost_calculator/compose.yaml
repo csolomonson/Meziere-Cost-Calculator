@@ -1,7 +1,8 @@
+name: cost-calculator
+
 services:
   app:
-    build: .
-    image: ${COST_APP_IMAGE:-cost-calculator:local}
+    image: ${COST_APP_IMAGE:?COST_APP_IMAGE must be set by deployment/release.env}
     restart: unless-stopped
     init: true
     logging:
@@ -17,6 +18,7 @@ services:
       COST_DB_USERNAME: ${COST_DB_USERNAME:-cost_app_access}
       COST_DB_DRIVER: ${COST_DB_DRIVER:-ODBC Driver 18 for SQL Server}
       COST_ERP_DATABASE: ${COST_ERP_DATABASE:-M1_ME}
+      COST_APP_STORAGE_MODE: ${COST_APP_STORAGE_MODE:-database}
       COST_APP_DATABASE: ${COST_APP_DATABASE:-M2_ME}
       COST_APP_SCHEMA: ${COST_APP_SCHEMA:-dbo}
       COST_DB_TRUST_SERVER_CERTIFICATE: ${COST_DB_TRUST_SERVER_CERTIFICATE:-false}
@@ -37,6 +39,7 @@ services:
     tmpfs:
       - /tmp
     volumes:
+      - ./deployment/runtime/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
       - update_state:/var/lib/cost-app
       - user_data:/var/lib/cost-app-users
     healthcheck:

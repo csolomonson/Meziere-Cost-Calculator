@@ -1,119 +1,112 @@
-# Production deployment
+# Container release deployment
 
-The supported production target is an Ubuntu Server 24.04 LTS VM running Docker
-Engine and Docker Compose. Caddy is the only published service and exposes HTTPS
-on TCP 443. The FastAPI container is reachable only from the private Compose
-network.
+Production releases are immutable, multi-platform application images published to
+GitHub Container Registry (GHCR). Each matching GitHub Release contains a small,
+source-free Ubuntu deployment bundle. The server does not clone the repository,
+install Python or Node.js, or build an image.
 
-For the exact preparation and August 17, 2026 procedure, use
-[`UBUNTU.md`](UBUNTU.md). The day-of deployment command is:
+The bundle contains Compose, Caddy configuration, the Ubuntu scripts, the DBA
+schema template, and `deployment/release.env`. The release workflow writes the
+exact image tag and multi-platform digest into `release.env`; startup copies that
+identity into the retained `.env` file. Pinning by digest prevents a moved tag from
+silently changing the deployed application.
+
+## Publish a release
+
+Create and push a semantic version tag from the commit to release:
 
 ```bash
-sudo bash deployment/ubuntu/install.sh
+git tag -a v1.2.3 -m "v1.2.3"
+git push origin v1.2.3
 ```
 
-The installer is idempotent and fail-fast. It installs Docker from Docker's
-official Ubuntu repository when needed, creates missing configuration and secrets
-interactively, builds a versioned image once, validates both SQL databases and the
-costing schema, starts the containers, waits for database-aware readiness, verifies
-HTTPS by both hostname and VM IPv4 address, and exports the Caddy root certificate.
-The VM address is detected during a new install and stored as `APP_IP_ADDRESS`.
-Older `.env` files are backfilled automatically on their next installer run.
+The repository-root `Publish container release` workflow then:
 
-For a new `.env`, the installer also asks whether app-owned costing tables should
-use a dedicated database or a dedicated schema inside the ERP database. Existing
-deployments default to their current dedicated database and `dbo` schema. The
-selection is stored as:
+1. builds `linux/amd64` and `linux/arm64` images;
+2. publishes `ghcr.io/<owner>/<repository>:v1.2.3`;
+3. creates a GitHub artifact attestation for the image digest;
+4. assembles `cost-calculator-v1.2.3-linux.tar.gz` without application source; and
+5. creates the GitHub Release with the bundle and its SHA-256 checksum.
 
-```dotenv
-COST_APP_STORAGE_MODE=database
-COST_APP_DATABASE=M2_ME
-COST_APP_SCHEMA=dbo
+GHCR packages inherit repository access by default. For an unauthenticated
+production pull, make the package public. For a private package, log in on the
+server with a read-only classic personal access token before startup:
+
+```bash
+printf '%s' "$GHCR_READ_TOKEN" | sudo docker login ghcr.io \
+  --username YOUR_GITHUB_USER --password-stdin
+unset GHCR_READ_TOKEN
 ```
 
-or, for an ERP namespace:
+## Server lifecycle
 
-```dotenv
-COST_APP_STORAGE_MODE=erp_schema
-COST_APP_DATABASE=M1_ME
-COST_APP_SCHEMA=CostCalculator
+Use [`UBUNTU.md`](UBUNTU.md) for the complete Ubuntu 22.04.5 procedure. The normal
+entry point is:
+
+```bash
+sudo bash deployment/ubuntu/start.sh
 ```
 
-The installer generates `deployment/runtime/reset-selected-storage.sql` for a
-database administrator to review and run. It never executes this destructive
-script or grants the runtime login schema-administration privileges.
+`start.sh` runs `configure.sh` first. Configuration is idempotent and performs the
+same important work as the former source-checkout installer: it installs Docker
+when needed, creates or validates `.env` and secret files, builds the runtime CA
+bundle, pulls the release image, creates the initial administrator, renders the
+DBA setup script, and runs the database/PDF preflight in a one-off container. It
+then starts the application and Caddy containers and verifies HTTPS readiness.
+Inside the application container, `configure-container.sh` verifies the mounted
+secrets and initializes the persistent application-user file before Uvicorn starts.
 
-An existing rehearsal can replace its selection interactively with
-`sudo bash deployment/ubuntu/install.sh --configure-storage`. This does not copy
-or migrate costing data; the generated reset script is only for a new or
-intentionally disposable target.
+`install.sh` remains as a compatibility alias for `start.sh`. To rerun only the
+configuration phase, use:
 
-After the initial installation, update the application from `origin/master` with:
+```bash
+sudo bash deployment/ubuntu/configure.sh
+```
+
+After a successful configuration-only run, start without repeating it:
+
+```bash
+sudo bash deployment/ubuntu/start.sh --skip-configure
+```
+
+## Persistent and security boundaries
+
+- The application image is pulled from GHCR by tag and digest; Compose has no
+  server-side `build` section.
+- Compose uses the fixed project name `cost-calculator`, so Caddy state,
+  application users, and update state survive release-directory changes.
+- SQL and application passwords remain file-backed secrets on the host and are
+  never placed in the image, release bundle, or `.env`.
+- Optional public SQL Server CA certificates in `deployment/sql-ca/*.crt` are
+  appended to the Ubuntu trust bundle at startup and mounted read-only into the
+  application. Site-specific trust material is not baked into the release image.
+- Only Caddy publishes a host port (TCP 443). The application remains on the
+  private Compose network.
+- Both containers have read-only root filesystems, drop capabilities, and set
+  `no-new-privileges`; Caddy receives only `NET_BIND_SERVICE`.
+- The application has no Docker socket, host update credential, or GitHub token.
+
+## Update and rollback
+
+Download and verify a new release bundle, then extract it over the existing fixed
+deployment directory. Keep `.env`, `secrets/`, and `deployment/runtime/`; they are
+not present in the archive and are retained. Run:
 
 ```bash
 sudo bash deployment/ubuntu/update.sh
 ```
 
-For a reviewed rehearsal branch, pass its name explicitly:
+This selects the new digest, runs startup configuration and preflight, records the
+previous image, and replaces the containers without deleting volumes.
 
-```bash
-sudo bash deployment/ubuntu/update.sh codex
-```
-
-The updater refuses a dirty checkout or a non-fast-forward branch, fetches Git as
-the account that invoked `sudo`, derives an immutable `git-<commit>` image version,
-then runs both the installer and verifier. Database settings and secrets are not
-changed.
-
-## Security boundaries
-
-- Only TCP 443 is published by Compose. Port 8000 is never bound to the VM.
-- Both containers use a read-only root filesystem, drop Linux capabilities, and
-  set `no-new-privileges`; Caddy receives only `NET_BIND_SERVICE`.
-- Database and application passwords are mounted as files, excluded from Git, and
-  not baked into images.
-- The application has no Docker socket, host filesystem, SSH key, or update
-  credential.
-- SQL Server uses encrypted ODBC connections. A private CA can be staged under
-  `deployment/sql-ca/` rather than disabling certificate validation.
-- App-owned SQL is fully schema-qualified. In ERP-schema mode, the runtime login
-  can be granted writes only to the dedicated app schema while retaining limited
-  read access to required ERP objects.
-- Caddy issues certificates for both `APP_HOSTNAME` and `APP_IP_ADDRESS` from a
-  deployment-local CA. The installer exports the public root for controlled
-  distribution to clients.
-- Application users and Caddy state live in named volumes and survive upgrades.
-
-`GET /api/health` is a process liveness check. `GET /api/ready` verifies both the
-ERP and costing database connections; Compose uses readiness, so a disconnected
-application cannot be reported healthy.
-
-## Releases and rollback
-
-`update.sh` generates a matching `APP_VERSION` and `COST_APP_IMAGE` from the first
-12 characters of the selected Git commit. Direct installer use must instead set a
-unique matching version and image tag in `.env`. Once an image exists, the
-installer treats it as immutable and will not rebuild the same tag. A successful
-upgrade retains the previous image name in `deployment/runtime/previous-image`.
-
-Rollback only the application containers with:
+Roll back only the application image with:
 
 ```bash
 sudo bash deployment/ubuntu/rollback.sh
 ```
 
-This does not modify Docker volumes or databases. Database schema changes need a
-separate, tested rollback or restore. For the first deployment, where no prior
-image exists, take the site out of service with `sudo docker compose down`; named
-volumes remain available.
+Rollback does not alter named volumes or databases. Database migrations require a
+separate reviewed rollback or restore plan.
 
-## Update UI boundary
-
-The existing update endpoints are a request/status contract only. The web
-application deliberately cannot install host updates. Do not give it the Docker
-socket. Until a separate signed-release supervisor is implemented, upgrades are
-performed from a reviewed release directory with the installer above.
-
-The retired Windows/IIS scripts are preserved for historical reference in
-`deployment/windows`, but they are not a supported production path and are
-excluded from the container build.
+`GET /api/health` is process liveness. `GET /api/ready` checks both SQL databases;
+Compose waits on readiness before reporting startup success.

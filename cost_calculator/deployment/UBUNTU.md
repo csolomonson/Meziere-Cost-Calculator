@@ -1,298 +1,173 @@
-# Ubuntu VM deployment runbook - August 17, 2026
+# Ubuntu 22.04.5 container deployment
 
-This runbook is designed so the person assisting on deployment day only needs to
-approve the final network change, run one command, and complete a short browser
-smoke test. Do not leave VM creation, SQL networking, certificates, or schema
-creation for August 17.
+This runbook installs a published GitHub Release on Ubuntu Server 22.04.5. The
+release image supports both amd64 and arm64. Use at least 2 vCPU, 4 GB RAM, and
+30 GB of disk, with a static IPv4 address and stable DNS name.
 
-## Target architecture
+## Network and database prerequisites
 
-Start with an Ubuntu Server 24.04 LTS VM with 2 vCPU, 4 GB RAM, and 30 GB of disk.
-Increase resources if rehearsal data shows sustained CPU, memory, or storage
-pressure. Use a static IP and a stable DNS name such as
-`cost-calculator.example.internal`.
-
-The VM needs:
+Allow the following traffic:
 
 | Direction | Port | Scope | Purpose |
 | --- | ---: | --- | --- |
 | Inbound | TCP 22 | administration network only | SSH management |
 | Inbound | TCP 443 | approved client networks | application HTTPS |
-| Outbound | TCP 1433 (or selected fixed port) | SQL Server only | ERP and costing databases |
+| Outbound | TCP 1433 or selected fixed port | SQL Server only | ERP and costing data |
+| Outbound | TCP 443 | Docker, GitHub, GHCR | first install and updates |
 | Outbound | UDP/TCP 53 | organization DNS | name resolution |
 | Outbound | UDP 123 | organization NTP | time synchronization |
-| Outbound during preparation | TCP 443 | approved package registries | Docker, base images, Python, Node, and Microsoft ODBC packages |
 
-Docker-published ports can bypass some host firewall rules, so enforce the inbound
-allowlist at the hypervisor, cloud security group, or upstream firewall as well as
-on the VM. Compose publishes only 443.
+Docker-published ports may bypass some host firewall rules. Enforce the inbound
+allowlist at the hypervisor, cloud security group, or upstream firewall too.
 
-Use a fixed SQL Server TCP endpoint in `host,port` form. Linux containers should
-not depend on Windows named-instance discovery. The runtime SQL login should have
-read access to the ERP database and read/write access to the costing database; use
-a separate privileged account for schema setup.
+Configure SQL Server with a fixed `host,port` endpoint. Linux containers should
+not use a Windows named instance such as `host\\instance`. The runtime SQL login
+needs read access to required ERP objects and read/write access to the selected
+costing schema. Use a separate privileged DBA account for schema setup.
 
-## Hyper-V rehearsal quick start (Ubuntu 22.04.5)
+## Download and verify the release
 
-Ubuntu 22.04.5 is supported by the installer. For a VM attached to Hyper-V's
-Default Switch, the guest's default gateway is normally the Windows host endpoint
-that the container can use to reach SQL Server. Confirm it rather than hard-coding
-an address because the Default Switch subnet can change.
-
-On the Ubuntu VM:
+Set the version and download both release assets:
 
 ```bash
-WINDOWS_HOST_IP="$(ip route show default | awk '/default/ {print $3; exit}')"
-VM_IP="$(hostname -I | awk '{print $1}')"
-printf 'Windows host: %s\nUbuntu VM: %s\n' "$WINDOWS_HOST_IP" "$VM_IP"
-
-sudo apt-get update
-sudo apt-get install -y git netcat-openbsd
-nc -vz "$WINDOWS_HOST_IP" 1433
+RELEASE_VERSION=v1.2.3
+RELEASE_BASE="https://github.com/csolomonson/Meziere-Cost-Calculator/releases/download/$RELEASE_VERSION"
+curl --fail --location --remote-name \
+  "$RELEASE_BASE/cost-calculator-$RELEASE_VERSION-linux.tar.gz"
+curl --fail --location --remote-name \
+  "$RELEASE_BASE/cost-calculator-$RELEASE_VERSION-linux.tar.gz.sha256"
+sha256sum --check "cost-calculator-$RELEASE_VERSION-linux.tar.gz.sha256"
 ```
 
-If the port test fails, use SQL Server Configuration Manager on Windows to enable
-TCP/IP for the test instance, clear `TCP Dynamic Ports`, set `TCP Port` under
-`IPAll` to a fixed port such as `1433`, and restart that SQL Server service. Then,
-from an elevated Windows PowerShell session, allow only the rehearsal VM to reach
-that port (replace the value with the `VM_IP` printed above):
-
-```powershell
-$VmIp = "172.20.0.10"
-New-NetFirewallRule -DisplayName "Cost Calculator rehearsal SQL" `
-  -Direction Inbound -Action Allow -Protocol TCP -LocalPort 1433 `
-  -RemoteAddress $VmIp
-```
-
-Repeat the `nc` test before continuing. Do not use `host\\instance`; the deployment
-expects the fixed endpoint printed above as `$WINDOWS_HOST_IP,1433`.
-
-Clone and deploy the rehearsal branch:
+Install the bundle into a fixed directory. Reusing this path on upgrades retains
+the ignored `.env`, secrets, and runtime artifacts:
 
 ```bash
-sudo install -d -o "$USER" -g "$USER" /opt/cost-calculator
-git clone --branch codex --single-branch \
-  https://github.com/csolomonson/Meziere-Cost-Calculator.git \
-  /opt/cost-calculator
-cd /opt/cost-calculator/cost_calculator
-sudo bash deployment/ubuntu/install.sh
-sudo bash deployment/ubuntu/verify.sh
+sudo install -d -m 0755 /opt/cost-calculator
+sudo tar -xzf "cost-calculator-$RELEASE_VERSION-linux.tar.gz" \
+  --strip-components=1 -C /opt/cost-calculator
+cd /opt/cost-calculator
 ```
 
-For the first-run prompts, use `cost-calculator.test` as the application hostname,
-accept the detected VM IPv4 address, use `<WINDOWS_HOST_IP>,1433` as the SQL
-endpoint, and enter the test SQL login/database names. It is acceptable to answer
-`y` to the SQL certificate bypass prompt only for this isolated rehearsal;
-production should validate the SQL Server certificate.
+The archive contains no application source and no credentials. Its
+`deployment/release.env` selects the release image by GHCR tag and SHA-256 digest.
 
-After the installer succeeds, print the guest IP and export the Caddy root CA:
+If the GHCR package is private, authenticate before startup with a token having
+only `read:packages` access:
 
 ```bash
-hostname -I
-ls -l deployment/runtime/caddy-root.crt
+printf '%s' "$GHCR_READ_TOKEN" | sudo docker login ghcr.io \
+  --username YOUR_GITHUB_USER --password-stdin
+unset GHCR_READ_TOKEN
 ```
 
-On Windows, copy `deployment/runtime/caddy-root.crt` from the VM and import only
-that known rehearsal CA into `Cert:\LocalMachine\Root` from an elevated PowerShell
-session. The application is immediately available at `https://<VM_IP>/`. To also
-use `https://cost-calculator.test/`, add `<VM_IP> cost-calculator.test` to the
-Windows hosts file (or create the equivalent DNS record). Both URLs use the same
-Caddy CA. Remove the firewall rule, optional hosts entry, and rehearsal CA when the
-VM is retired.
+## Optional SQL Server certificate authority
 
-## Decisions to freeze by August 7
-
-Record these values in the change ticket:
-
-- VM hostname, static IP, and application DNS name;
-- SQL Server DNS name and fixed TCP port;
-- ERP and costing database names;
-- whether costing storage uses a dedicated database or a dedicated schema inside
-  the ERP database, including the schema name;
-- runtime SQL login name;
-- whether the SQL certificate chains to a public/system CA or an internal CA;
-- initial application administrator username;
-- release version and source commit; and
-- client networks and people performing the smoke test.
-
-Do not put either password in the ticket or `.env`.
-
-## Complete by August 10
-
-1. Provision and patch the Ubuntu 24.04 VM. Configure DNS, NTP, SSH keys, VM
-   backups/snapshots, monitoring, and the upstream firewall.
-2. Configure SQL Server with a fixed TCP port and allow the VM's IP. Confirm the
-   SQL certificate name matches the DNS name used by the application.
-3. Copy a reviewed release directory to `/opt/cost-calculator`. Keep it owned by
-   root or a dedicated deployment account and do not share-write it with the app.
-4. If SQL Server uses an internal CA, copy only the public root/intermediate PEM
-   certificates to `deployment/sql-ca/*.crt`. Never copy a private key.
-5. Run the installer far enough to select the costing storage layout and generate
-   `deployment/runtime/reset-selected-storage.sql`. A missing-table preflight
-   failure is expected until the next step.
-6. Because the current costing data is disposable, have the database owner review
-   and run that generated script once. For dedicated-database mode it creates the
-   selected database when missing. For ERP-schema mode it creates only the app
-   schema and tables inside the existing ERP database. The script is destructive
-   only within the selected app schema. Never grant schema creation to the runtime
-   login.
-7. Grant the runtime login read access only to the ERP objects the application
-   needs. The generated script grants read/write access to the app schema.
-8. From the release directory, rerun:
-
-   ```bash
-   sudo bash deployment/ubuntu/install.sh
-   ```
-
-   On the first run, the installer prompts for missing non-secret values, the SQL
-   password, and an initial application administrator. Password input is hidden.
-9. Import `deployment/runtime/caddy-root.crt` into the managed trust store for all
-   client machines, preferably through Group Policy or the organization's endpoint
-   management system. Do not send it as an arbitrary end-user download.
-10. Run `sudo bash deployment/ubuntu/verify.sh`.
-
-## Rehearsal - complete by August 12
-
-Rehearse on the final VM or an exact clone with the same network rules:
-
-1. Run the installer from a clean checkout and time it.
-2. Confirm both database checks and all seven required costing tables pass.
-3. From a managed client, verify HTTPS is trusted at both the DNS name and VM IP.
-4. Verify a missing or incorrect login returns 401, then sign in as administrator.
-5. Search for a part, calculate a representative cost, save it as current, reopen
-   it, and confirm the saved user identity.
-6. Open both PDFs. Compare the internal report's sources, equations, totals, notes,
-   and reconciliation with the saved worksheet. Confirm the customer report lists
-   the unit and extended charge for every backflushed material and operation without
-   exposing internal rates or margins.
-   Include a multi-page internal example.
-7. Add a temporary user, reset its password, and remove it.
-8. Restart the VM. Confirm Docker starts the application and rerun `verify.sh`.
-9. Exercise `rollback.sh` with two harmless version tags, then redeploy the final
-   tag. Schema changes are intentionally outside image rollback.
-10. Save the results in the change record and resolve every warning.
-
-Keep the final versioned image on the VM. The installer will not rebuild an
-existing image tag, so the August 17 run needs no package or image downloads. If
-code changes after rehearsal, assign a new version and repeat the rehearsal.
-
-## Freeze - August 13 through August 16
-
-- Freeze the source commit, version, image tag, `.env`, firewall change, DNS record,
-  SQL permissions, and client trust deployment.
-- Confirm `sudo docker image inspect <image-tag>` and
-  `sudo docker image inspect caddy:2.11.4-alpine` both succeed on the VM.
-- Confirm `.env` is mode 600. Confirm both files under `secrets/` are mode 400
-  and owned by the UID/GID reported by the application image. Do not copy their
-  contents into the ticket.
-- Take a VM snapshot or confirm the VM backup restore point.
-- Put the previous image tag and rollback command in the change record.
-- Schedule the app owner, VM/network owner, SQL owner, and a business tester. The
-  SQL owner should be on call, not doing routine installer work.
-
-## August 17 execution
-
-### 1. Start the change window
-
-Confirm the frozen version, VM snapshot, SQL availability, DNS, client trust, and
-inbound 443 rule. Stop if any frozen input differs from rehearsal.
-
-### 2. Deploy
-
-SSH to the VM, enter the release directory, and run exactly:
+Production should validate the SQL Server certificate. If it uses an internal CA,
+copy only the PEM-encoded public root and intermediate certificates before
+startup:
 
 ```bash
-sudo bash deployment/ubuntu/install.sh
+sudo install -m 0644 company-sql-root.crt \
+  /opt/cost-calculator/deployment/sql-ca/company-sql-root.crt
 ```
 
-With the VM prepared, this command is non-interactive. It validates configuration,
-SQL credentials, both databases, the schema, and ReportLab; starts the containers;
-waits for readiness; checks HTTPS at both configured addresses; and prints the
-running image. If it exits
-nonzero, save the printed logs and use the rollback section instead of improvising
-a partial fix.
+Never copy a SQL private key. Startup combines these public certificates with the
+Ubuntu CA bundle and mounts the result read-only into the application container.
 
-### 3. Automated verification
+## Configure and start
+
+Run one command:
+
+```bash
+cd /opt/cost-calculator
+sudo bash deployment/ubuntu/start.sh
+```
+
+On the first run, the startup configuration prompts for:
+
+- application DNS hostname and VM IPv4 address;
+- SQL Server `host,port`, login, ERP database, and costing storage layout;
+- whether SQL certificate identity validation is temporarily bypassed;
+- the SQL password; and
+- the initial application administrator username and password.
+
+The script installs Docker Engine and Compose from Docker's official Ubuntu
+repository if needed. It then pulls the digest-pinned application and Caddy
+images, writes protected host configuration, and runs the deployment preflight in
+a one-off application container. No compiler or application build tool is
+installed on the server.
+
+For a new database or disposable schema, the first preflight can stop because the
+tables do not exist. Have a DBA review and run:
+
+```text
+/opt/cost-calculator/deployment/runtime/reset-selected-storage.sql
+```
+
+That generated script is destructive within the selected app schema. The runtime
+login never executes it. After the DBA completes setup, rerun `start.sh`.
+
+Successful startup prints the hostname and IPv4 URLs and exports Caddy's public
+root certificate to:
+
+```text
+/opt/cost-calculator/deployment/runtime/caddy-root.crt
+```
+
+Distribute that public certificate through managed client configuration (for
+example Group Policy or endpoint management). Do not distribute Caddy private
+keys or Docker volume contents.
+
+## Verify
+
+Run the full automated verifier after installation and after every update:
 
 ```bash
 sudo bash deployment/ubuntu/verify.sh
 ```
 
-This must print `All automated deployment checks passed.`
+It checks the container state, SQL credentials, required schema, PDF runtime,
+process health, database-aware readiness, and HTTPS at both configured addresses.
 
-### 4. Five-minute business smoke test
+Also complete a browser smoke test: reject an invalid login, sign in as the
+administrator, calculate and save a representative cost, reopen it, and open both
+PDF reports.
 
-From a managed client using the production DNS name (and once by VM IP during the
-rehearsal):
+## Upgrade
 
-1. confirm HTTPS is trusted with no certificate warning;
-2. confirm a bad password is rejected;
-3. sign in and search for a known part;
-4. calculate, save, reopen, and verify one representative costing run; and
-5. open **Internal PDF** and **Customer PDF**, compare their unit and total prices,
-   and confirm their internal versus customer disclosure is appropriate.
+Download and checksum the new assets exactly as above. Extract the new bundle over
+`/opt/cost-calculator`, then run:
 
-Record the version from `/api/version`, the tester, and the pass time. The change
-owner can then announce service availability.
+```bash
+cd /opt/cost-calculator
+sudo bash deployment/ubuntu/update.sh
+sudo bash deployment/ubuntu/verify.sh
+```
 
-## Rollback
+The release metadata updates `.env` to the new digest. Startup preflight completes
+before the running containers are replaced. The fixed Compose project name keeps
+the application-user and Caddy volumes attached across versions.
 
-If an upgrade fails and a previous version exists:
+## Rollback and operations
+
+Rollback to the previously recorded application image without changing data:
 
 ```bash
 sudo bash deployment/ubuntu/rollback.sh
 sudo bash deployment/ubuntu/verify.sh
 ```
 
-This switches only the application image. It preserves users, Caddy state, and
-database data, and it does not reverse database changes.
-
-For a failed first deployment with no previous image:
-
-```bash
-sudo docker compose down
-```
-
-Leave named volumes in place for diagnosis. Do not add `--volumes`. Close or revert
-inbound 443, document the failure, and reschedule after a complete rehearsal.
-
-## Routine operations
-
-Deploy the latest reviewed commit from `origin/master` during a maintenance
-window:
-
-```bash
-cd /opt/cost-calculator/cost_calculator
-sudo bash deployment/ubuntu/update.sh
-```
-
-To update the rehearsal server from another reviewed branch, pass the branch name:
-
-```bash
-sudo bash deployment/ubuntu/update.sh codex
-```
-
-The checkout must be clean. The script fetches and fast-forwards the selected
-branch, generates `APP_VERSION` and `COST_APP_IMAGE` from its Git commit, installs
-the image, and runs the full verifier. It does not run database migrations. Review
-and execute any required migration separately before deploying code that depends
-on it.
+Useful diagnostics:
 
 ```bash
 sudo docker compose ps
 sudo docker compose logs --tail=200 app proxy
-sudo bash deployment/ubuntu/verify.sh
+APP_CONTAINER="$(sudo docker compose ps -q app)"
+sudo docker inspect --format '{{.Config.Image}} {{.State.Health.Status}}' "$APP_CONTAINER"
 ```
 
-Future costing data must use the organization's SQL Server backup process. Also
-back up the `user_data` and `caddy_data` Docker volumes before VM replacement; the
-latter preserves the CA already trusted by clients.
-
-If the VM IPv4 address changes, update `APP_IP_ADDRESS` in `.env` and rerun the
-installer. Caddy will issue the replacement IP certificate from its existing CA,
-so clients that already trust that CA do not need to import a new root certificate.
-
-The Docker installation follows the official guidance:
-
-- <https://docs.docker.com/engine/install/ubuntu/>
-- <https://docs.docker.com/compose/install/linux/>
+Restarting the VM is safe: Docker is enabled at boot and both services use
+`restart: unless-stopped`. Back up the application-user and Caddy data volumes as
+part of VM protection, and keep SQL data under the organization's SQL Server
+backup policy.
