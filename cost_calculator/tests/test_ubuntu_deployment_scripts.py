@@ -46,15 +46,21 @@ class NativeVmDeploymentContractTests(unittest.TestCase):
         self.assertNotIn("docker/", WORKFLOW)
         self.assertNotIn("ghcr.io", WORKFLOW)
 
-    def test_installer_targets_ubuntu_and_installs_host_dependencies(self):
-        self.assertIn('"${VERSION_ID:-}" == "24.04"', INSTALL)
+    def test_installer_targets_supported_ubuntu_lts_releases(self):
+        self.assertIn('22.04|24.04', INSTALL)
+        self.assertIn('ubuntu/$ubuntu_version/packages-microsoft-prod.deb', INSTALL)
+        self.assertIn('ppa:deadsnakes/ppa', INSTALL)
+        self.assertIn('python3.11-venv', INSTALL)
+        self.assertIn('python_command="python3.11"', INSTALL)
+
+    def test_installer_installs_host_dependencies(self):
         self.assertIn("python3-venv", INSTALL)
         self.assertIn("https://deb.nodesource.com/node_22.x", INSTALL)
         self.assertIn("Node.js 22 is required", INSTALL)
         self.assertIn("msodbcsql18", INSTALL)
         self.assertIn("apt-get install -y caddy", INSTALL)
         self.assertIn("pnpm run build", INSTALL)
-        self.assertIn('python3 -m venv "$staging_dir/.venv"', INSTALL)
+        self.assertIn('"$python_command" -m venv "$staging_dir/.venv"', INSTALL)
 
     def test_installer_preflights_before_atomically_switching_release(self):
         self.assertLess(INSTALL.index("preflight_release\n"), INSTALL.index("activate_release\n"))

@@ -9,6 +9,8 @@ state_root="/var/lib/cost-calculator"
 service_user="cost-calculator"
 service_group="cost-calculator"
 staging_dir=""
+ubuntu_version=""
+python_command=""
 
 log() {
     printf '\n==> %s\n' "$*"
@@ -29,8 +31,11 @@ require_host() {
     [[ -r /etc/os-release ]] || fail "Cannot identify this operating system."
     # shellcheck disable=SC1091
     source /etc/os-release
-    [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || \
-        fail "The native deployment supports Ubuntu Server 24.04 LTS."
+    [[ "${ID:-}" == "ubuntu" ]] || fail "The native deployment supports Ubuntu Server only."
+    case "${VERSION_ID:-}" in
+        22.04|24.04) ubuntu_version="$VERSION_ID" ;;
+        *) fail "The native deployment supports Ubuntu Server 22.04 or 24.04 LTS." ;;
+    esac
     [[ "$(dpkg --print-architecture)" =~ ^(amd64|arm64)$ ]] || fail "Only amd64 and arm64 VMs are supported."
 }
 
@@ -39,7 +44,22 @@ install_host_packages() {
     log "Installing native VM prerequisites"
     apt-get update
     apt-get install -y apt-transport-https ca-certificates curl debian-archive-keyring debian-keyring gnupg \
-        python3 python3-pip python3-venv build-essential git unixodbc unixodbc-dev
+        build-essential git unixodbc unixodbc-dev
+
+    if [[ "$ubuntu_version" == "22.04" ]]; then
+        # pandas 3 requires Python 3.11+. Jammy's default Python is 3.10, so use
+        # the current CPython 3.11 packages maintained by the deadsnakes PPA.
+        apt-get install -y software-properties-common
+        add-apt-repository -y ppa:deadsnakes/ppa
+        apt-get update
+        apt-get install -y python3.11 python3.11-dev python3.11-venv
+        python_command="python3.11"
+    else
+        apt-get install -y python3 python3-dev python3-pip python3-venv
+        python_command="python3"
+    fi
+    "$python_command" -c 'import sys; assert sys.version_info >= (3, 11)' || \
+        fail "Python 3.11 or newer is required."
 
     local node_major
     node_major="$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || true)"
@@ -84,7 +104,7 @@ install_host_packages() {
         local microsoft_package temporary_dir
         temporary_dir="$(mktemp -d)"
         microsoft_package="$temporary_dir/packages-microsoft-prod.deb"
-        curl -fsSL "https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb" \
+        curl -fsSL "https://packages.microsoft.com/config/ubuntu/$ubuntu_version/packages-microsoft-prod.deb" \
             -o "$microsoft_package"
         dpkg -i "$microsoft_package"
         rm -rf -- "$temporary_dir"
@@ -155,7 +175,7 @@ build_and_stage_release() {
     )
     tar -C "$project_root" -cf - "${runtime_paths[@]}" | tar -C "$staging_dir" -xf -
 
-    python3 -m venv "$staging_dir/.venv"
+    "$python_command" -m venv "$staging_dir/.venv"
     "$staging_dir/.venv/bin/python" -m pip install --upgrade pip
     "$staging_dir/.venv/bin/python" -m pip install --requirement "$staging_dir/requirements.txt"
 

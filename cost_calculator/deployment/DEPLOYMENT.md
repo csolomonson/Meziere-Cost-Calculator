@@ -1,6 +1,6 @@
 # Native Ubuntu VM deployment
 
-Production runs directly on an Ubuntu Server 24.04 LTS VM. Uvicorn runs as the
+Production runs directly on an Ubuntu Server 22.04 or 24.04 LTS VM. Uvicorn runs as the
 unprivileged `cost-calculator` system account and listens only on
 `127.0.0.1:8000`. Caddy is a separate host service and is the only process that
 accepts client traffic, on HTTPS port 443.

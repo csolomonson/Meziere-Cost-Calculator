@@ -111,7 +111,7 @@ numbered files in `database/migrations/` in order.
 
 ## Production
 
-Production runs directly on an Ubuntu Server 24.04 LTS VM. The installer creates a
+Production runs directly on an Ubuntu Server 22.04 or 24.04 LTS VM. The installer creates a
 versioned Python environment under `/opt/cost-calculator`, runs Uvicorn as a
 restricted systemd service on loopback, and installs Caddy as the HTTPS service on
 port 443. Docker and Compose are not used.

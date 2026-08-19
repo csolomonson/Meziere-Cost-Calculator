@@ -1,7 +1,9 @@
-# Ubuntu 24.04 native VM runbook
+# Ubuntu 22.04 and 24.04 native VM runbook
 
-The application runs directly on an Ubuntu Server 24.04 LTS VM. Docker, Compose,
-and a container registry are not used.
+The application runs directly on an Ubuntu Server 22.04 or 24.04 LTS VM. Docker,
+Compose, and a container registry are not used. On Ubuntu 22.04, the installer
+adds the deadsnakes PPA for Python 3.11 because the OS default Python 3.10 cannot
+run pandas 3. Ubuntu 24.04 uses its system Python 3.12.
 
 ## VM preparation
 
