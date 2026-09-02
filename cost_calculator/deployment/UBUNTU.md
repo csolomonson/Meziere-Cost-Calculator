@@ -97,6 +97,24 @@ cd /opt/cost-calculator-source/cost_calculator
 sudo bash deployment/ubuntu/update.sh master
 ```
 
+For installations tracking the native `no_docker` branch, use:
+
+```bash
+cd /opt/cost-calculator-source/cost_calculator
+sudo bash deployment/ubuntu/update.sh no_docker
+```
+
+## Application access groups
+
+The shared user directory supports separate access to the co-hosted applications:
+
+- `users` grants Product Cost Calculator access.
+- `sales-orders` grants Shopify Sales Order Queue access.
+- `administrators` grants both and permits user management.
+
+Create a sales-order-only employee with only the `sales-orders` group. Add both
+`users` and `sales-orders` when an employee needs both applications.
+
 The update script refuses a dirty checkout and a non-fast-forward update. To
 deploy an extracted tagged bundle instead, run that bundle's `install.sh`.
 
