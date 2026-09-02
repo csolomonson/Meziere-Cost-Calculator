@@ -104,6 +104,13 @@ class NativeVmDeploymentContractTests(unittest.TestCase):
     def test_caddy_is_a_separate_host_service_on_https(self):
         self.assertIn("servers :443", CADDY)
         self.assertIn("reverse_proxy 127.0.0.1:8000", CADDY)
+        self.assertIn("# BEGIN shopify-order-listener managed route", CADDY)
+        self.assertIn("handle /sales-orders*", CADDY)
+        self.assertIn("reverse_proxy 127.0.0.1:8010", CADDY)
+        self.assertLess(
+            CADDY.index("handle /sales-orders*"),
+            CADDY.index("reverse_proxy 127.0.0.1:8000"),
+        )
         self.assertIn("tls internal", CADDY)
         self.assertIn("EnvironmentFile=/etc/cost-calculator/caddy.env", CADDY_OVERRIDE)
         self.assertIn("XDG_DATA_HOME=/var/lib/caddy/data", CADDY_OVERRIDE)

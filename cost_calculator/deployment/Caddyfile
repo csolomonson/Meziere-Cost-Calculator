@@ -9,7 +9,17 @@
 https://{$APP_HOSTNAME}, https://{$APP_IP_ADDRESS} {
   tls internal
   encode zstd gzip
-  reverse_proxy 127.0.0.1:8000
+
+  # BEGIN shopify-order-listener managed route
+  handle /sales-orders* {
+    reverse_proxy 127.0.0.1:8010
+  }
+
+  handle {
+    reverse_proxy 127.0.0.1:8000
+  }
+  # END shopify-order-listener managed route
+
   header {
     Strict-Transport-Security "max-age=31536000"
     -Server

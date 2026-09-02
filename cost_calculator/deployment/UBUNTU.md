@@ -138,6 +138,11 @@ agree. If this safety check fails, it stops without changing files or restarting
 services. Correct the configuration, or use the explicit reconfiguration
 procedure below when a hostname or VM address change is intentional.
 
+The installed Caddyfile permanently reserves `/sales-orders*` for the co-hosted
+Shopify Sales Order Queue on `127.0.0.1:8010`. Keeping this route in the canonical
+configuration prevents a costing update from removing it and avoids modifying
+the Caddyfile from inside Caddy's read-only systemd sandbox.
+
 ## Roll back
 
 To switch back to the previously active application release:
