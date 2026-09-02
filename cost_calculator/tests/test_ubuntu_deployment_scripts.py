@@ -76,6 +76,8 @@ class NativeVmDeploymentContractTests(unittest.TestCase):
         self.assertIn("reset-selected-storage.sql", CONFIGURE)
         self.assertIn("tools.create_user_seed", CONFIGURE)
         self.assertIn("GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA", CONFIGURE)
+        self.assertIn(']] || return 0', CONFIGURE)
+        self.assertNotIn(']] || return\n', CONFIGURE)
 
     def test_routine_install_preserves_caddy_identity_and_checks_for_drift(self):
         self.assertIn('[[ ! -s "$caddy_config_file" || "$reconfigure" == "true" ]]', CONFIGURE)

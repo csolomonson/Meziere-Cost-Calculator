@@ -232,7 +232,7 @@ verify_caddy_config_matches_runtime() {
 }
 
 create_db_password() {
-    [[ ! -s "$db_password_file" || "$replace_db_password" == "true" ]] || return
+    [[ ! -s "$db_password_file" || "$replace_db_password" == "true" ]] || return 0
     [[ -t 0 ]] || fail "$db_password_file is missing and input is not interactive."
     local password confirmation
     log "Creating the SQL password secret"
