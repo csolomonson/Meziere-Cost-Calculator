@@ -25,6 +25,15 @@ class AuthenticationError(Exception):
     pass
 
 
+class AuthorizationError(Exception):
+    pass
+
+
+def authorize_costing(principal: Principal) -> None:
+    if not {"users", "administrators"}.intersection(principal.groups):
+        raise AuthorizationError("Membership in users is required")
+
+
 _AUTH_CACHE_KEY = secrets.token_bytes(32)
 _AUTH_CACHE: dict[bytes, float] = {}
 _AUTH_CACHE_LOCK = threading.Lock()
@@ -105,7 +114,10 @@ def configured_users() -> dict[str, dict]:
 
 def authenticate_request(request: Request) -> Principal:
     if not boolean_setting("COST_APP_AUTH_REQUIRED", True):
-        return Principal(setting("COST_APP_DEV_USERNAME", "developer") or "developer")
+        return Principal(
+            setting("COST_APP_DEV_USERNAME", "developer") or "developer",
+            ("users",),
+        )
     header = request.headers.get("Authorization", "")
     if not header.startswith("Basic "):
         raise AuthenticationError

@@ -84,9 +84,12 @@ after-hours timing, and cost recalculation relationships.
 
 ## API organization
 
-All routes except `GET /api/health` and `GET /api/ready` require HTTP Basic authentication. The root page
-receives the authenticated session, and saved costs are attributed to that user even
-if a client submits a different `costed_by` value.
+All routes except `GET /api/health` and `GET /api/ready` require HTTP Basic
+authentication and membership in `users` or `administrators`. An account with
+only the `sales-orders` group can use the co-hosted Sales Order Queue without
+accessing this application. The root page receives the authenticated session,
+and saved costs are attributed to that user even if a client submits a different
+`costed_by` value.
 
 The API is grouped as follows:
 

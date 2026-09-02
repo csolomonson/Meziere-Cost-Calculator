@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 
-from authentication import AuthenticationError, authenticate_request
+from authentication import AuthorizationError, AuthenticationError, authenticate_request, authorize_costing
 from web.paths import STATIC_DIR
 from web.routers import admin, catalog, costs, reports, settings, system
 
@@ -20,6 +20,7 @@ async def require_authentication(request: Request, call_next):
         return await call_next(request)
     try:
         request.state.principal = authenticate_request(request)
+        authorize_costing(request.state.principal)
     except AuthenticationError:
         return JSONResponse(
             {"detail": "Authentication required"},
@@ -30,6 +31,8 @@ async def require_authentication(request: Request, call_next):
                 )
             },
         )
+    except AuthorizationError as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=403)
     except RuntimeError as exc:
         return JSONResponse({"detail": str(exc)}, status_code=503)
     response = await call_next(request)

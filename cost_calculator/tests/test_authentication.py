@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from authentication import AuthenticationError, authenticate_request, password_hash
+from authentication import AuthorizationError, AuthenticationError, Principal, authenticate_request, authorize_costing, password_hash
 
 
 def request(username: str, password: str):
@@ -14,6 +14,16 @@ def request(username: str, password: str):
 
 
 class AuthenticationTests(unittest.TestCase):
+    def test_costing_group_is_allowed(self):
+        authorize_costing(Principal("costing", ("users",)))
+
+    def test_administrators_are_allowed(self):
+        authorize_costing(Principal("admin", ("administrators",)))
+
+    def test_sales_order_only_user_is_denied(self):
+        with self.assertRaises(AuthorizationError):
+            authorize_costing(Principal("shipper", ("sales-orders",)))
+
     def test_hashed_user_authenticates_with_groups(self):
         users = {
             "alice": {
@@ -50,6 +60,7 @@ class AuthenticationTests(unittest.TestCase):
         with patch.dict(os.environ, environment, clear=True):
             principal = authenticate_request(SimpleNamespace(headers={}))
         self.assertEqual(principal.username, "local-tester")
+        self.assertEqual(principal.groups, ("users",))
 
 
 if __name__ == "__main__":
