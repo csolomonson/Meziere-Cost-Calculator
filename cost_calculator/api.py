@@ -20,6 +20,7 @@ from user_management import (
     UserConflictError,
     UserStoreError,
     add_user,
+    change_own_password,
     delete_user,
     list_users,
     update_user,
@@ -54,6 +55,7 @@ from web.app import app, require_authentication
 from web.dependencies import require_administrator, user_management_error
 from web.paths import BASE_DIR, STATIC_DIR
 from web.routers.admin import change_user, create_user, get_users, remove_user
+from web.routers.account import change_password
 from web.routers.catalog import (
     external_operation_purchase_orders,
     material_default,
@@ -85,6 +87,7 @@ from web.routers.system import (
     conversion_calculator_settings,
     get_update,
     health,
+    logout,
     readiness,
     index,
     install_update,
@@ -97,6 +100,7 @@ from web.schemas import (
     CostRunSaveRequest,
     CurrentCostRequest,
     MarkupBreak,
+    PasswordChangeRequest,
     SettingsRequest,
     UserCreateRequest,
     UserUpdateRequest,

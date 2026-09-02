@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from authentication import AuthorizationError, AuthenticationError, Principal, authenticate_costing_request, authenticate_request, authorize_costing, password_hash
+from authentication import AuthorizationError, AuthenticationError, Principal, authenticate_costing_request, authenticate_request, authorize_costing, authorize_costing_path, password_hash
 
 
 def request(username: str, password: str):
@@ -23,6 +23,13 @@ class AuthenticationTests(unittest.TestCase):
     def test_sales_order_only_user_is_denied(self):
         with self.assertRaises(AuthorizationError):
             authorize_costing(Principal("shipper", ("sales-orders",)))
+
+    def test_any_authenticated_group_can_reach_own_password_route(self):
+        principal = Principal("shipper", ("sales-orders",))
+
+        authorize_costing_path(principal, "/api/account/password")
+        with self.assertRaises(AuthorizationError):
+            authorize_costing_path(principal, "/api/session")
 
     def test_sales_order_only_credentials_are_denied_at_costing_boundary(self):
         users = {

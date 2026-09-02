@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from user_management import UserConflictError, add_user, delete_user, list_users, update_user
+from authentication import password_hash, password_matches_record
+from user_management import UserConflictError, add_user, change_own_password, delete_user, list_users, update_user
 
 
 class UserManagementTests(unittest.TestCase):
@@ -48,6 +49,25 @@ class UserManagementTests(unittest.TestCase):
     def test_non_administrator_can_be_deleted(self):
         users = delete_user("operator")
         self.assertEqual([user["username"] for user in users], ["admin"])
+
+    def test_user_can_change_only_their_own_password(self):
+        stored = json.loads(self.path.read_text())
+        stored["operator"]["password_hash"] = password_hash("old-password", iterations=10)
+        self.path.write_text(json.dumps(stored))
+
+        change_own_password("operator", "old-password", "new-password")
+
+        changed = json.loads(self.path.read_text())
+        self.assertTrue(password_matches_record("new-password", changed["operator"]))
+        self.assertEqual(changed["operator"]["groups"], ["users"])
+
+    def test_password_change_requires_the_current_password(self):
+        stored = json.loads(self.path.read_text())
+        stored["operator"]["password_hash"] = password_hash("old-password", iterations=10)
+        self.path.write_text(json.dumps(stored))
+
+        with self.assertRaisesRegex(ValueError, "Current password is incorrect"):
+            change_own_password("operator", "wrong-password", "new-password")
 
 
 if __name__ == "__main__":

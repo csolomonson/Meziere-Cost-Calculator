@@ -19,6 +19,24 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+SIGNED_OUT_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Signed out</title>
+  <style>
+    body { background: #f4f7fb; color: #172033; display: grid; font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; place-items: center; }
+    main { background: #fff; border: 1px solid #d7dee8; border-radius: 12px; box-shadow: 0 12px 32px #1b2b4b1a; max-width: 420px; padding: 32px; text-align: center; }
+    h1 { margin: 0 0 10px; }
+    p { color: #5f6b7a; margin: 0 0 22px; }
+    a { background: #245bc7; border-radius: 7px; color: #fff; display: inline-block; font-weight: 800; padding: 10px 16px; text-decoration: none; }
+  </style>
+</head>
+<body><main><h1>Signed out</h1><p>Your Meziere application credentials have been cleared from this browser.</p><a href="/">Sign in again</a></main></body>
+</html>"""
+
+
 @router.get("/api/health")
 def health():
     return {"ok": True}
@@ -44,6 +62,17 @@ def readiness():
 def session(request: Request):
     principal = request.state.principal
     return {"username": principal.username, "groups": principal.groups}
+
+
+@router.get("/logout", response_class=HTMLResponse)
+def logout():
+    return HTMLResponse(
+        SIGNED_OUT_HTML,
+        headers={
+            "Clear-Site-Data": '"cache", "cookies", "storage"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.get("/api/version")

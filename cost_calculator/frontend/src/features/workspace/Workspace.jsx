@@ -44,7 +44,7 @@ import { FocusEditor } from "./FocusEditor.jsx";
 import { LineList } from "./LineList.jsx";
 import { Review } from "./Review.jsx";
 
-export function Workspace({ run, setRun, original, setOriginal, setMode, draft, onCostMaterial, onOpenMaterialSourceCost, returnCrumb, onReturnToParent, onReturnWithUnitCost, landingFocus, onLandingHandled, initialView }) {
+export function Workspace({ run, setRun, original, setOriginal, setMode, draft, onCostMaterial, onOpenMaterialSourceCost, returnCrumb, onReturnToParent, onReturnWithUnitCost, landingFocus, onLandingHandled, initialView, onChangePassword }) {
   const [view, setView] = useState(initialView || "review"), [focus, setFocus] = useState(null), [edited, setEdited] = useState(() => new Set()), [markupScope, setMarkupScope] = useState(() => run.settings?.markupBreakScope || "global"), [globalMarkupBreaks, setGlobalMarkupBreaks] = useState(() => normalizeMarkupBreaks(run.settings?.globalMarkupBreaks || run.settings?.markupBreaks)), [partMarkupBreaks, setPartMarkupBreaks] = useState(() => normalizeOptionalMarkupBreaks(run.settings?.partMarkupBreaks)), [markupBreaks, setMarkupBreaks] = useState(() => normalizeMarkupBreaks(run.settings?.markupBreaks)), [globalDefaults, setGlobalDefaults] = useState(() => run.settings?.globalDefaults || defaultGlobalMachineDefaults), [shift, setShift] = useState(() => run.settings?.shift || defaultShiftSettings), [machineDefaults, setMachineDefaults] = useState(() => run.settings?.machineDefaults || buildMachineDefaults(run.operation_lines)), [settingsFocusMachine, setSettingsFocusMachine] = useState(null), [poTarget, setPoTarget] = useState(null), [jobTarget, setJobTarget] = useState(null), [historyTarget, setHistoryTarget] = useState(null), [saveState, setSaveState] = useState("");
   const recalced = useMemo(() => recalcRun(run, markupBreaks, shift), [run, markupBreaks, shift]);
   useEffect(() => { setRun(recalced); }, [recalced.part_cost.ucpTotalMarkedUpCost]);
@@ -185,6 +185,8 @@ export function Workspace({ run, setRun, original, setOriginal, setMode, draft, 
       <button className={view === "materials" ? "active" : ""} onClick={() => setView("materials")}>Materials</button>
       <button className={view === "operations" ? "active" : ""} onClick={() => setView("operations")}>Operations</button>
       <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}>Settings</button>
+      <Button className="account-link" tone="secondary" onClick={onChangePassword}>Change password</Button>
+      <a className="button secondary logout-link" href="/logout">Log out</a>
     </nav>
     {view === "review" && <Review run={run} setView={setView} openLine={openLine} returnCrumb={returnCrumb} internalReportUrl={internalReportUrl} customerReportUrl={customerReportUrl} />}
     {view === "materials" && <LineList kind="material" rows={run.material_lines} originalRows={original.material_lines} onOpen={openLine} onAdd={() => addLine("material")} onDelete={removeRow} onResetLines={() => resetLines("material")} onRefreshDefaults={() => refreshDefaults("material")} onUpdateMaterialCost={updateMaterialPartCost} canReset={lineMembershipChanged("material")} />}

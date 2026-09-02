@@ -102,6 +102,10 @@
 .update-notice small { color: #36566f; }
 
 .user-management-modal { width: min(1120px, 94vw); max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; background: var(--panel, #fff); border-radius: 14px; box-shadow: 0 22px 70px rgba(20, 35, 50, .28); }
+.account-modal { width: min(480px, 94vw); background: var(--panel, #fff); border-radius: 14px; box-shadow: 0 22px 70px rgba(20, 35, 50, .28); }
+.account-modal > header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border, #d7dee5); }
+.account-modal h2 { margin: 0; }
+.account-modal form { display: grid; gap: 14px; padding: 20px 22px; }
 .user-management-modal > header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border, #d7dee5); }
 .user-management-modal h2, .add-user-form h3 { margin: 0; }
 .user-management-body { padding: 20px 22px; overflow: auto; display: grid; gap: 18px; }

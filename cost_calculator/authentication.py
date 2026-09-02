@@ -34,6 +34,12 @@ def authorize_costing(principal: Principal) -> None:
         raise AuthorizationError("Membership in users is required")
 
 
+def authorize_costing_path(principal: Principal, path: str) -> None:
+    if path == "/api/account/password":
+        return
+    authorize_costing(principal)
+
+
 _AUTH_CACHE_KEY = secrets.token_bytes(32)
 _AUTH_CACHE: dict[bytes, float] = {}
 _AUTH_CACHE_LOCK = threading.Lock()
@@ -86,6 +92,14 @@ def _verify_pbkdf2(password: str, encoded: str) -> bool:
     return secrets.compare_digest(actual, expected)
 
 
+def password_matches_record(password: str, user: dict) -> bool:
+    if user.get("password_hash"):
+        return _verify_pbkdf2(password, user["password_hash"])
+    return user.get("password") is not None and secrets.compare_digest(
+        password, str(user["password"])
+    )
+
+
 def password_hash(password: str, iterations: int = 600_000) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations).hex()
@@ -134,11 +148,7 @@ def authenticate_request(request: Request) -> Principal:
     cache_key = _credential_cache_key(username, password, user)
     if _is_cached(cache_key):
         return Principal(username, tuple(user.get("groups", ())))
-    if user.get("password_hash"):
-        valid = _verify_pbkdf2(password, user["password_hash"])
-    else:
-        valid = user.get("password") is not None and secrets.compare_digest(password, str(user["password"]))
-    if not valid:
+    if not password_matches_record(password, user):
         raise AuthenticationError
     _cache_success(cache_key)
     return Principal(username, tuple(user.get("groups", ())))

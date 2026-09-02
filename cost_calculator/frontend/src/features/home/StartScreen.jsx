@@ -75,7 +75,7 @@ export function RecentCostsTable({ rows, position, hasNewer, hasOlder, loading, 
   </div>;
 }
 
-export function StartScreen({ draft, setDraft, loadErp, startBlank, openSettings, openSavedCost, openUserManagement, isAdministrator, loading, error }) {
+export function StartScreen({ draft, setDraft, loadErp, startBlank, openSettings, openSavedCost, openUserManagement, onChangePassword, isAdministrator, loading, error }) {
   const partRef = useRef(null), partSearchRef = useRef(null), qtyRef = useRef(null), suggestionRequestRef = useRef(0), historyRequestRef = useRef(0), [suggestions, setSuggestions] = useState([]), [recentPages, setRecentPages] = useState([]), [recentPage, setRecentPage] = useState(1), [recentLoading, setRecentLoading] = useState(true), [recentError, setRecentError] = useState("");
   useClickAway(partSearchRef, suggestions.length > 0, () => setSuggestions([]));
   useEffect(() => { partRef.current?.focus(); }, []);
@@ -143,7 +143,7 @@ export function StartScreen({ draft, setDraft, loadErp, startBlank, openSettings
   return <main className="start-screen home-screen">
     <section className="home-shell">
       <section className="home-panel start-panel dashboard-start">
-        <div className="panel-title"><div><span className="eyebrow">Costing</span><h1>Cost calculator</h1></div><div className="home-actions">{isAdministrator && <Button tone="secondary" onClick={openUserManagement}>User management</Button>}<Button tone="secondary" onClick={openSettings}>Machine settings</Button><Button tone="secondary" onClick={startBlank}>Blank worksheet</Button></div></div>
+        <div className="panel-title"><div><span className="eyebrow">Costing</span><h1>Cost calculator</h1></div><div className="home-actions">{isAdministrator && <Button tone="secondary" onClick={openUserManagement}>User management</Button>}<Button tone="secondary" onClick={openSettings}>Machine settings</Button><Button tone="secondary" onClick={startBlank}>Blank worksheet</Button><Button tone="secondary" onClick={onChangePassword}>Change password</Button><a className="button secondary" href="/logout">Log out</a></div></div>
         <form className="start-form dashboard-form" onSubmit={submitStart}>
           <div className="part-search-wrap" ref={partSearchRef}><label className="field part-search"><span>Part number</span><input ref={partRef} autoComplete="off" value={draft.part_id} onChange={(event) => update("part_id", event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === "ArrowDown" && suggestions[0]) { event.preventDefault(); choose(suggestions[0]); } if (event.key === "Enter" && suggestions[0]) { event.preventDefault(); choose(suggestions[0]); } if (event.key === "Escape") setSuggestions([]); }} /></label>{suggestions.length > 0 && <div className="start-suggestions">{suggestions.map((part) => <button type="button" key={part.impPartID + "::" + (part.impPartRevisionID || "")} onClick={() => choose(part)}><strong>{part.impPartID}<small className="suggestion-revision">{part.impPartRevisionID ? "rev " + part.impPartRevisionID : "base"}</small></strong><span>{part.impShortDescription || part.impPartShortDescription || "No description"}</span></button>)}</div>}</div>
           <label className="field"><span>Revision</span><input autoComplete="off" value={draft.revision_id} onChange={(event) => update("revision_id", event.target.value)} /></label>
@@ -160,5 +160,3 @@ export function StartScreen({ draft, setDraft, loadErp, startBlank, openSettings
     </section>
   </main>;
 }
-
-

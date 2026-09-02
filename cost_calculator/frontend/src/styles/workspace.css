@@ -91,6 +91,8 @@
   padding: 6px 14px;
 }
 .tabs button.active { background: var(--panel); border-color: var(--line); color: var(--ink); box-shadow: var(--shadow); }
+.tabs .account-link { margin-left: auto; }
+.tabs .logout-link { min-height: 34px; padding: 6px 14px; }
 .page-grid {
   display: grid;
   gap: 12px;

@@ -7,6 +7,7 @@ from api import app
 EXPECTED_APPLICATION_ROUTES = {
     ("GET", "/"),
     ("GET", "/api/admin/users"),
+    ("POST", "/api/account/password"),
     ("POST", "/api/admin/users"),
     ("DELETE", "/api/admin/users/{username}"),
     ("PUT", "/api/admin/users/{username}"),
@@ -23,6 +24,7 @@ EXPECTED_APPLICATION_ROUTES = {
     ("GET", "/api/ready"),
     ("GET", "/api/jobs/operation"),
     ("GET", "/api/jobs/recent"),
+    ("GET", "/logout"),
     ("GET", "/api/materials/default"),
     ("GET", "/api/operations/search"),
     ("GET", "/api/parts/search"),
@@ -50,6 +52,7 @@ EXPECTED_COMPATIBILITY_EXPORTS = {
     "CurrentCostRequest",
     "MATERIAL_BREAKDOWN_FIELDS",
     "MarkupBreak",
+    "PasswordChangeRequest",
     "STATIC_DIR",
     "SettingsRequest",
     "UserConflictError",
@@ -66,6 +69,8 @@ EXPECTED_COMPATIBILITY_EXPORTS = {
     "calculate_cost",
     "calculator_config",
     "change_user",
+    "change_own_password",
+    "change_password",
     "conversion_calculator_calculate",
     "conversion_calculator_settings",
     "cost_history",
@@ -102,6 +107,7 @@ EXPECTED_COMPATIBILITY_EXPORTS = {
     "index",
     "install_update",
     "list_users",
+    "logout",
     "mark_part_cost_current",
     "material_default",
     "material_purchase_orders",
@@ -147,6 +153,13 @@ EXPECTED_COMPATIBILITY_EXPORTS = {
 
 
 class ApiContractTests(unittest.TestCase):
+    def test_logout_clears_browser_authentication_state(self):
+        response = api.logout()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["clear-site-data"], '"cache", "cookies", "storage"')
+        self.assertIn("Signed out", response.body.decode())
+
     def test_compatibility_entry_point_retains_established_exports(self):
         missing = {
             name for name in EXPECTED_COMPATIBILITY_EXPORTS if not hasattr(api, name)
@@ -158,7 +171,7 @@ class ApiContractTests(unittest.TestCase):
         actual = {
             (method, path)
             for route in app.routes
-            if ((path := getattr(route, "path", "")) == "/" or path.startswith("/api/"))
+            if ((path := getattr(route, "path", "")) in {"/", "/logout"} or path.startswith("/api/"))
             for method in (getattr(route, "methods", None) or set())
         }
 
@@ -169,7 +182,7 @@ class ApiContractTests(unittest.TestCase):
         actual_paths = {
             path
             for path in schema["paths"]
-            if path == "/" or path.startswith("/api/")
+            if path in {"/", "/logout"} or path.startswith("/api/")
         }
 
         self.assertEqual(

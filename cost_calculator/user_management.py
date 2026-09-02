@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import Lock
 
 from app_config import secret_file_path
-from authentication import password_hash
+from authentication import password_hash, password_matches_record
 
 
 ADMIN_GROUP = "administrators"
@@ -84,6 +84,7 @@ def _write(path: Path, users: dict[str, dict]) -> None:
     temporary = path.with_suffix(f".{os.getpid()}.tmp")
     try:
         temporary.write_text(json.dumps(users, indent=2) + "\n", encoding="utf-8")
+        temporary.chmod(0o600)
         os.replace(temporary, path)
     except OSError as exc:
         try:
@@ -159,6 +160,23 @@ def update_user(username: str, password: str | None, groups: list[str] | None) -
                 record["password_hash"] = password_hash(password)
             _write(path, users)
             return _public_users(users)
+
+
+def change_own_password(username: str, current_password: str, new_password: str) -> None:
+    if len(new_password) < 8:
+        raise ValueError("New password must be at least 8 characters")
+    with _PROCESS_LOCK:
+        path = _users_path()
+        with _file_lock(path):
+            users = _read(path)
+            if username not in users:
+                raise KeyError(username)
+            record = users[username]
+            if not password_matches_record(current_password, record):
+                raise ValueError("Current password is incorrect")
+            record.pop("password", None)
+            record["password_hash"] = password_hash(new_password)
+            _write(path, users)
 
 
 def delete_user(username: str) -> list[dict]:

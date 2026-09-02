@@ -58,6 +58,11 @@ class UserUpdateRequest(BaseModel):
     groups: list[str] | None = None
 
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=1024)
+    new_password: str = Field(..., min_length=8, max_length=1024)
+
+
 class ConversionCalculationRequest(BaseModel):
     mode: str
     values: dict[str, float] = Field(default_factory=dict)

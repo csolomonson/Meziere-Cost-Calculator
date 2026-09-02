@@ -5,9 +5,9 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 
-from authentication import AuthorizationError, AuthenticationError, authenticate_costing_request
+from authentication import AuthorizationError, AuthenticationError, authenticate_request, authorize_costing_path
 from web.paths import STATIC_DIR
-from web.routers import admin, catalog, costs, reports, settings, system
+from web.routers import account, admin, catalog, costs, reports, settings, system
 
 
 app = FastAPI(title="Product Cost Calculator", version="0.1.0")
@@ -16,10 +16,11 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.middleware("http")
 async def require_authentication(request: Request, call_next):
-    if request.url.path in {"/api/health", "/api/ready"}:
+    if request.url.path in {"/api/health", "/api/ready", "/logout"}:
         return await call_next(request)
     try:
-        request.state.principal = authenticate_costing_request(request)
+        request.state.principal = authenticate_request(request)
+        authorize_costing_path(request.state.principal, request.url.path)
     except AuthenticationError:
         return JSONResponse(
             {"detail": "Authentication required"},
@@ -86,6 +87,7 @@ def _register_routes(router: APIRouter) -> None:
 
 for feature_router in (
     system.router,
+    account.router,
     admin.router,
     catalog.router,
     settings.router,
