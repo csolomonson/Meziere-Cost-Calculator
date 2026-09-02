@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd -- "$script_dir/../.." && pwd)"
-branch="${1:-master}"
+branch="${1:-no_docker}"
 
 fail() {
     printf '\nERROR: %s\n' "$*" >&2
@@ -12,6 +12,7 @@ fail() {
 
 usage() {
     printf 'Usage: sudo bash deployment/ubuntu/update.sh [branch]\n'
+    printf 'The default production branch is no_docker.\n'
 }
 
 if [[ "$branch" == "--help" || "$branch" == "-h" ]]; then
@@ -25,6 +26,18 @@ fi
 [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "Run with sudo: sudo bash deployment/ubuntu/update.sh [branch]"
 command -v git >/dev/null 2>&1 || fail "Git is required to update this checkout."
 git check-ref-format --branch "$branch" >/dev/null 2>&1 || fail "Invalid Git branch name: $branch"
+
+runtime_config="/etc/cost-calculator/runtime.env"
+caddy_config="/etc/cost-calculator/caddy.env"
+if [[ -s "$runtime_config" && -s "$caddy_config" ]]; then
+    runtime_hostname="$(bash -c 'source "$1"; printf "%s" "${APP_HOSTNAME:-}"' bash "$runtime_config")"
+    runtime_ip_address="$(bash -c 'source "$1"; printf "%s" "${APP_IP_ADDRESS:-}"' bash "$runtime_config")"
+    caddy_hostname="$(bash -c 'source "$1"; printf "%s" "${APP_HOSTNAME:-}"' bash "$caddy_config")"
+    caddy_ip_address="$(bash -c 'source "$1"; printf "%s" "${APP_IP_ADDRESS:-}"' bash "$caddy_config")"
+    [[ -n "$runtime_hostname" && -n "$runtime_ip_address" && \
+        "$runtime_hostname" == "$caddy_hostname" && "$runtime_ip_address" == "$caddy_ip_address" ]] || \
+        fail "TLS safety check failed: runtime.env uses '$runtime_hostname' at '$runtime_ip_address' but caddy.env uses '$caddy_hostname' at '$caddy_ip_address'. No files or services were changed. Correct the configuration or deliberately run configure.sh --reconfigure before updating."
+fi
 
 git_user="${SUDO_USER:-}"
 if [[ -z "$git_user" || "$git_user" == "root" ]]; then

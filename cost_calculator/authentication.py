@@ -142,3 +142,10 @@ def authenticate_request(request: Request) -> Principal:
         raise AuthenticationError
     _cache_success(cache_key)
     return Principal(username, tuple(user.get("groups", ())))
+
+
+def authenticate_costing_request(request: Request) -> Principal:
+    """Authenticate a request and enforce access to the costing application."""
+    principal = authenticate_request(request)
+    authorize_costing(principal)
+    return principal

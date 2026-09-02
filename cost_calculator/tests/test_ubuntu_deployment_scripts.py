@@ -77,6 +77,18 @@ class NativeVmDeploymentContractTests(unittest.TestCase):
         self.assertIn("tools.create_user_seed", CONFIGURE)
         self.assertIn("GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA", CONFIGURE)
 
+    def test_routine_install_preserves_caddy_identity_and_checks_for_drift(self):
+        self.assertIn('[[ ! -s "$caddy_config_file" || "$reconfigure" == "true" ]]', CONFIGURE)
+        self.assertIn("Keeping the existing Caddy hostname and certificate identity", CONFIGURE)
+        self.assertIn("verify_caddy_config_matches_runtime", CONFIGURE)
+        self.assertIn("Refusing to change TLS during a routine install", CONFIGURE)
+
+    def test_update_checks_tls_identity_before_fetching(self):
+        safety_check = UPDATE.index("TLS safety check failed")
+        fetch = UPDATE.index("run_git fetch")
+        self.assertLess(safety_check, fetch)
+        self.assertIn("No files or services were changed", UPDATE)
+
     def test_systemd_runs_uvicorn_as_a_restricted_service_account(self):
         self.assertIn("User=cost-calculator", SERVICE)
         self.assertIn("EnvironmentFile=/etc/cost-calculator/runtime.env", SERVICE)
@@ -103,6 +115,7 @@ class NativeVmDeploymentContractTests(unittest.TestCase):
         self.assertIn("caddy-root.crt", VERIFY)
 
     def test_update_and_rollback_preserve_release_boundaries(self):
+        self.assertIn('branch="${1:-no_docker}"', UPDATE)
         self.assertIn("merge --ff-only", UPDATE)
         self.assertIn("status --porcelain", UPDATE)
         self.assertIn("native Ubuntu deployment", UPDATE)

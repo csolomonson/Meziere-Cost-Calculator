@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from authentication import AuthorizationError, AuthenticationError, Principal, authenticate_request, authorize_costing, password_hash
+from authentication import AuthorizationError, AuthenticationError, Principal, authenticate_costing_request, authenticate_request, authorize_costing, password_hash
 
 
 def request(username: str, password: str):
@@ -23,6 +23,21 @@ class AuthenticationTests(unittest.TestCase):
     def test_sales_order_only_user_is_denied(self):
         with self.assertRaises(AuthorizationError):
             authorize_costing(Principal("shipper", ("sales-orders",)))
+
+    def test_sales_order_only_credentials_are_denied_at_costing_boundary(self):
+        users = {
+            "shipper": {
+                "password_hash": password_hash("test-password", iterations=10),
+                "groups": ["sales-orders"],
+            }
+        }
+        with patch.dict(
+            os.environ,
+            {"COST_APP_USERS_JSON": json.dumps(users), "COST_APP_AUTH_REQUIRED": "true"},
+            clear=True,
+        ):
+            with self.assertRaises(AuthorizationError):
+                authenticate_costing_request(request("shipper", "test-password"))
 
     def test_hashed_user_authenticates_with_groups(self):
         users = {

@@ -94,14 +94,15 @@ stage it as a new release, preflight it, and activate it:
 
 ```bash
 cd /opt/cost-calculator-source/cost_calculator
-sudo bash deployment/ubuntu/update.sh master
+sudo bash deployment/ubuntu/update.sh
 ```
 
-For installations tracking the native `no_docker` branch, use:
+The production updater defaults to the native `no_docker` branch. To select a
+different reviewed branch deliberately, provide its name explicitly:
 
 ```bash
 cd /opt/cost-calculator-source/cost_calculator
-sudo bash deployment/ubuntu/update.sh no_docker
+sudo bash deployment/ubuntu/update.sh another-branch
 ```
 
 ## Application access groups
@@ -115,8 +116,27 @@ The shared user directory supports separate access to the co-hosted applications
 Create a sales-order-only employee with only the `sales-orders` group. Add both
 `users` and `sales-orders` when an employee needs both applications.
 
+Verify a sales-order-only account against the costing boundary with:
+
+```bash
+curl --user employee-name -i https://costing.meziere.net/api/session
+```
+
+`curl` prompts for the password; the expected response is `HTTP 403`. Browsers
+cache HTTP Basic credentials for a hostname, so use a fresh private window or a
+separate browser profile when testing a different account. Seeing the costing
+screen in a browser that was previously authenticated as an administrator does
+not establish which credentials the browser is currently sending.
+
 The update script refuses a dirty checkout and a non-fast-forward update. To
 deploy an extracted tagged bundle instead, run that bundle's `install.sh`.
+
+Routine updates preserve `/etc/cost-calculator/caddy.env`; they cannot silently
+replace the hostname or IP address used for TLS. Before fetching code, the
+updater also confirms that the runtime and Caddy hostnames and IP addresses
+agree. If this safety check fails, it stops without changing files or restarting
+services. Correct the configuration, or use the explicit reconfiguration
+procedure below when a hostname or VM address change is intentional.
 
 ## Roll back
 
